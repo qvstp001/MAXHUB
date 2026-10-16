@@ -29,11 +29,17 @@ def base_url(value, optional=False):
     url = urlsplit(value)
     if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password or url.query or url.fragment or any(c.isspace() for c in value):
         raise ValueError('请输入完整的 HTTP(S) 地址，不能带账号、查询参数或片段')
+    try:
+        port = url.port
+    except ValueError:
+        raise ValueError('地址端口必须是 1–65535 范围内的整数') from None
+    if port is not None and not 1 <= port <= 65535:
+        raise ValueError('地址端口必须是 1–65535 范围内的整数')
     return value
 
 
 class App:
-    def __init__(self, data, roots, password, public_url='http://localhost:8096', litepan_url=''):
+    def __init__(self, data, roots, password, public_url='http://localhost:8096', proxy_url=''):
         if len(password) < 10:
             raise ValueError('ADMIN_PASSWORD 至少需要 10 个字符')
         self.store = Store(data)
@@ -47,8 +53,8 @@ class App:
         self.secure_cookie = os.getenv('COOKIE_SECURE', 'false').lower() == 'true'
         self.auth_lock = threading.Lock()
         self.failures = {}
-        initial = {'public_url': base_url(public_url), 'litepan_url': base_url(litepan_url, True),
-                   'playback_mode': 'litepan' if litepan_url else 'direct',
+        initial = {'public_url': base_url(public_url), 'proxy_url': base_url(proxy_url, True),
+                   'playback_mode': 'proxy' if proxy_url else 'direct',
                    'rewrite_from': '', 'rewrite_to': '', 'scan_interval': max(0, int(os.getenv('SCAN_INTERVAL', '1800')))}
         self.store.put({k: v for k, v in initial.items() if self.store.get(k) is None})
 
@@ -67,21 +73,21 @@ class App:
             return False
 
     def settings(self):
-        keys = ('public_url', 'litepan_url', 'playback_mode', 'rewrite_from', 'rewrite_to', 'scan_interval', 'api_key')
+        keys = ('public_url', 'proxy_url', 'playback_mode', 'rewrite_from', 'rewrite_to', 'scan_interval', 'api_key')
         return {**{k: self.store.get(k) for k in keys}, 'roots': [str(r) for r in self.scanner.roots], 'version': __version__}
 
     def save_settings(self, values):
-        allowed = {'public_url', 'litepan_url', 'playback_mode', 'rewrite_from', 'rewrite_to', 'scan_interval'}
+        allowed = {'public_url', 'proxy_url', 'playback_mode', 'rewrite_from', 'rewrite_to', 'scan_interval'}
         if set(values) - allowed:
             raise ValueError('包含不能修改的设置')
-        for key in ('public_url', 'litepan_url', 'rewrite_from', 'rewrite_to'):
+        for key in ('public_url', 'proxy_url', 'rewrite_from', 'rewrite_to'):
             if key in values:
                 values[key] = base_url(values[key], key != 'public_url')
         merged = {**self.settings(), **values}
-        if merged['playback_mode'] not in ('direct', 'litepan'):
+        if merged['playback_mode'] not in ('direct', 'proxy'):
             raise ValueError('无效的播放模式')
-        if merged['playback_mode'] == 'litepan' and not merged['litepan_url']:
-            raise ValueError('LitePan 模式需要填写客户端可访问的反代地址')
+        if merged['playback_mode'] == 'proxy' and not merged['proxy_url']:
+            raise ValueError('302 反代模式需要填写客户端可访问的播放入口，端口按实际部署配置')
         if bool(merged['rewrite_from']) != bool(merged['rewrite_to']):
             raise ValueError('地址替换的来源和目标需要同时填写')
         if type(merged['scan_interval']) is not int or not 0 <= merged['scan_interval'] <= 604800:
@@ -258,7 +264,7 @@ class Handler(BaseHTTPRequestHandler):
         if path.lower() == '/system/info/public' and not post:
             return self.send(body={'ServerName': 'QMaxHub', 'Version': __version__, 'Id': self.app.store.get('server_id')})
         if not self.emby_auth(query):
-            return self.send(401, {'error': '需要 LitePan API Key'})
+            return self.send(401, {'error': '需要媒体服务 API Key'})
         lower = path.lower()
         if lower == '/system/info' and not post:
             return self.send(body={'ServerName': 'QMaxHub', 'Version': __version__, 'Id': self.app.store.get('server_id'), 'ProductName': 'QMaxHub', 'SupportsLibraryMonitor': False})
@@ -280,7 +286,7 @@ class Handler(BaseHTTPRequestHandler):
             ids = query.get('ids', [''])[0].split(',')
             movies = [m for m in self.app.store.movies() if not ids[0] or m['id'] in ids]
             return self.send(body={'Items': [self.app.emby_item(m) for m in movies], 'TotalRecordCount': len(movies)})
-        return self.send(404, {'error': '接口不存在；QMaxHub 仅提供 LitePan 所需的 Emby 接口子集'})
+        return self.send(404, {'error': '接口不存在；QMaxHub 仅提供播放对接所需的 Emby 兼容接口子集'})
 
     def login(self):
         password = self.body().get('password', '')
@@ -340,7 +346,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not resource:
                     return self.send(404, {'error': '没有可播放资源，请重新扫描'})
                 self.app.source(self.app.store.resource(resource['id']))
-                base = self.app.store.get('litepan_url') if self.app.store.get('playback_mode') == 'litepan' else self.app.store.get('public_url')
+                base = self.app.store.get('proxy_url') if self.app.store.get('playback_mode') == 'proxy' else self.app.store.get('public_url')
                 params = urlencode({'MediaSourceId': resource['id'], 'Static': 'true', 'play_token': self.app.ticket(movie['id'], resource['id'])})
                 play_url = f'{base}/Videos/{movie["id"]}/stream?{params}'
                 self.app.store.state(movie['id'], {'last_played': time.time()})

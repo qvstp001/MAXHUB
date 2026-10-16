@@ -4,14 +4,15 @@ services:
     container_name: qmaxhub
     restart: unless-stopped
     ports:
-      - "${QMAXHUB_PORT:-8096}:8096"
+      - "${QMAXHUB_PORT:-8096}:${PORT:-8096}"
     environment:
       TZ: Asia/Shanghai
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 设置管理员密码}
       DATA_DIR: /data
       LIBRARY_ROOTS: /media
-      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8096}
-      LITEPAN_PUBLIC_URL: ${LITEPAN_PUBLIC_URL:-}
+      PORT: ${PORT:-8096}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${QMAXHUB_PORT:-8096}}
+      PLAYBACK_PROXY_URL: ${PLAYBACK_PROXY_URL:-}
       SCAN_INTERVAL: ${SCAN_INTERVAL:-1800}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:

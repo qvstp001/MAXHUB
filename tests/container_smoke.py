@@ -97,7 +97,7 @@ def check(base, expect_persisted=False):
     require(request(f'/api/movies/{identity}/state', {'favorite': True, 'watched': True, 'rating': 4})[0] == 200, 'user state saved to data volume')
     settings = request('/api/settings')[2]
     info = request(f'/Items/{identity}/PlaybackInfo', {}, {'X-Emby-Token': settings['api_key']})
-    require(info[0] == 200 and len(info[2]['MediaSources']) == 2, 'LitePan-compatible playback metadata')
+    require(info[0] == 200 and len(info[2]['MediaSources']) == 2, 'Emby-compatible playback metadata')
     links = request(f'/api/movies/{identity}/play', {'resource_id': movie['resources'][0]['id']})[2]
     play = urlsplit(links['url'])
     path = play.path + '?' + play.query

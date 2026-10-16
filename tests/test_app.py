@@ -28,7 +28,7 @@ class AppTest(unittest.TestCase):
         self.root.mkdir()
         self.folder = self.root / 'DEMO-001'
         self.folder.mkdir()
-        (self.folder / 'DEMO-001-CD1.strm').write_text('\ufeff#EXTM3U\nhttp://127.0.0.1:5211/strm/token/1/file/movie.mp4?sign=a%2Fb&x=1\n', encoding='utf-8')
+        (self.folder / 'DEMO-001-CD1.strm').write_text('\ufeff#EXTM3U\nhttp://127.0.0.1:18081/strm/token/1/file/movie.mp4?sign=a%2Fb&x=1\n', encoding='utf-8')
         (self.folder / 'DEMO-001-CD2.strm').write_text('http://example.test/part2.mp4', encoding='utf-8')
         (self.folder / 'movie.nfo').write_text(NFO, encoding='utf-8')
         (self.folder / 'poster.jpg').write_bytes(b'poster-test')
@@ -38,7 +38,7 @@ class AppTest(unittest.TestCase):
         (self.folder / 'extrafanart').mkdir()
         (self.folder / 'extrafanart' / '10.jpg').write_bytes(b'sample-10')
         (self.folder / 'extrafanart' / '2.jpg').write_bytes(b'sample-2')
-        self.app = App(Path(self.temp.name) / 'data', [self.root], 'test-password-123', 'http://192.168.1.10:8096', 'http://192.168.1.10:42069')
+        self.app = App(Path(self.temp.name) / 'data', [self.root], 'test-password-123', 'http://192.168.1.10:8096', 'http://192.168.1.10:18443')
         self.scan()
         self.server = make_server(self.app, '127.0.0.1', 0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -111,7 +111,7 @@ class AppTest(unittest.TestCase):
         movie = self.movie()
         status, _, links = self.request(f'/api/movies/{movie["id"]}/play', {})
         self.assertEqual(status, 200)
-        self.assertTrue(links['url'].startswith('http://192.168.1.10:42069/Videos/'))
+        self.assertTrue(links['url'].startswith('http://192.168.1.10:18443/Videos/'))
         self.assertTrue(links['potplayer'].startswith('potplayer://http://'))
         self.assertIn('package=is.xyz.mpv;', links['mpv'])
         self.assertIn('scheme=http;', links['mpv'])
@@ -136,13 +136,13 @@ class AppTest(unittest.TestCase):
 
     def test_settings_rewrite_and_validation(self):
         self.login()
-        self.assertEqual(self.request('/api/settings', {'litepan_url': 'javascript:bad'})[0], 400)
+        self.assertEqual(self.request('/api/settings', {'proxy_url': 'javascript:bad'})[0], 400)
         self.assertEqual(self.request('/api/settings', {'scan_interval': -1})[0], 400)
         self.assertEqual(self.request('/api/settings', {'api_key': 'changed'})[0], 400)
-        self.assertEqual(self.request('/api/settings', {'rewrite_from': 'http://127.0.0.1:5211', 'rewrite_to': 'http://192.168.1.10:42069'})[0], 200)
+        self.assertEqual(self.request('/api/settings', {'rewrite_from': 'http://127.0.0.1:18081', 'rewrite_to': 'http://192.168.1.10:18443'})[0], 200)
         resource = self.app.store.resource(self.movie()['resources'][0]['id'])
         target = self.app.source(resource)
-        self.assertTrue(target.startswith('http://192.168.1.10:42069/strm/'))
+        self.assertTrue(target.startswith('http://192.168.1.10:18443/strm/'))
         self.assertIn('sign=a%2Fb&x=1', target)
         self.assertEqual(self.request('/api/settings', {'playback_mode': 'direct'})[0], 200)
         links = self.request(f'/api/movies/{self.movie()["id"]}/play', {})[2]
@@ -215,6 +215,58 @@ class AppTest(unittest.TestCase):
         self.assertEqual(len(current['resources']), 2)
         self.assertTrue(current['favorite'])
         self.assertEqual(current['title'], '示例 & 收藏')
+
+    def test_proxy_supports_custom_ports_https_and_path_prefixes(self):
+        self.login()
+        movie = self.movie()
+        for address in ('https://proxy.example:19443/media', 'https://proxy.example/gateway', 'http://proxy.example:18081'):
+            with self.subTest(address=address):
+                status, _, settings = self.request('/api/settings', {'playback_mode': 'proxy', 'proxy_url': address})
+                self.assertEqual(status, 200)
+                self.assertEqual(settings['proxy_url'], address)
+                links = self.request(f'/api/movies/{movie["id"]}/play', {})[2]
+                self.assertTrue(links['url'].startswith(address + '/Videos/'))
+                self.assertTrue(links['potplayer'].startswith('potplayer://' + address + '/Videos/'))
+                self.assertIn('scheme=' + urlsplit(address).scheme + ';', links['mpv'])
+        for address in ('http://proxy.example:bad', 'http://proxy.example:65536', 'http://proxy.example:0'):
+            self.assertEqual(self.request('/api/settings', {'proxy_url': address})[0], 400)
+        self.assertEqual(self.request('/api/settings', {'proxy_url': ''})[0], 400)
+
+    def test_provider_settings_migrate_without_resetting_user_data(self):
+        self.login()
+        movie = self.movie()
+        self.app.store.state(movie['id'], {'favorite': True, 'watched': True, 'rating': 4})
+        old_keys = {key: self.app.store.get(key) for key in ('api_key', 'signing_key', 'server_id')}
+        resource_id = movie['resources'][0]['id']
+        ticket = self.app.ticket(movie['id'], resource_id)
+        with self.app.store.connect() as db:
+            db.execute('DELETE FROM settings WHERE key=?', ('proxy_url',))
+        self.app.store.put({'litepan_url': 'https://proxy.example:19443/streaming', 'playback_mode': 'litepan'})
+        data = Path(self.temp.name) / 'data'
+        for _ in range(2):
+            migrated = App(data, [self.root], 'test-password-123')
+            self.assertEqual(migrated.settings()['proxy_url'], 'https://proxy.example:19443/streaming')
+            self.assertEqual(migrated.settings()['playback_mode'], 'proxy')
+            self.assertIsNone(migrated.store.get('litepan_url'))
+            self.assertNotIn('litepan', json.dumps(migrated.settings()))
+            for key, value in old_keys.items():
+                self.assertEqual(migrated.store.get(key), value)
+            self.assertTrue(migrated.verify(movie['id'], resource_id, ticket))
+            self.assertTrue(migrated.store.movie(movie['id'])['favorite'])
+            self.assertTrue(migrated.store.movie(movie['id'])['watched'])
+            self.assertEqual(migrated.store.movie(movie['id'])['rating'], 4)
+        self.server.app = migrated
+        self.assertEqual(self.request('/api/movies')[0], 200)
+        links = self.request(f'/api/movies/{movie["id"]}/play', {})[2]
+        self.assertTrue(links['url'].startswith('https://proxy.example:19443/streaming/Videos/'))
+
+    def test_migration_preserves_newer_proxy_configuration(self):
+        self.app.store.put({'litepan_url': 'http://retired.example:18081',
+                            'proxy_url': 'https://new-proxy.example:19443/media', 'playback_mode': 'direct'})
+        migrated = App(Path(self.temp.name) / 'data', [self.root], 'test-password-123', proxy_url='http://initial.example')
+        self.assertEqual(migrated.settings()['proxy_url'], 'https://new-proxy.example:19443/media')
+        self.assertEqual(migrated.settings()['playback_mode'], 'direct')
+        self.assertIsNone(migrated.store.get('litepan_url'))
 
 
 if __name__ == '__main__':

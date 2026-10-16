@@ -42,7 +42,7 @@ def main():
         (folder / 'movie.strm').write_text(f'https://example.test/fictional/{i+1}.mp4')
         (folder / 'movie.nfo').write_text(f'<movie><num>DEMO-{i+1:03}</num><title>示例影片：{title}</title><plot>这是用于界面验证的虚构影片资料，海报为程序生成的抽象图形，播放地址仅为占位。真实影片将读取你的 NFO 和本地图片。</plot><studio>示例工作室</studio><premiered>2025-0{i+1}-12</premiered><runtime>120</runtime><rating>{7+i/10:.1f}</rating><set><name>示例收藏系列</name></set><actor><name>示例演员 {i%3+1}</name></actor><tag>示例资料</tag><genre>剧情</genre></movie>', encoding='utf-8')
         poster(folder / 'poster.png', i)
-    app = App(root / 'data', [media], 'preview-only-123', 'http://127.0.0.1:18096', 'http://192.168.1.10:42069')
+    app = App(root / 'data', [media], 'preview-only-123', 'http://127.0.0.1:18096', '')
     app.scanner.start()
     server = make_server(app, '127.0.0.1', 18096)
     print('Fictional preview: http://127.0.0.1:18096 | password: preview-only-123', flush=True)

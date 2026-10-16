@@ -2,7 +2,7 @@
 
 面向 STRM 与本地 NFO 的私人影片资料库。浏览器管理，Docker 常驻运行，Windows PotPlayer / Android mpv 外部播放。
 
-当前为 **0.1.0 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
+当前为 **0.1.1 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
 
 ## 已实现
 
@@ -14,37 +14,39 @@
 - 收藏、手动已看标记、个人评分持久保存；重新扫描不覆盖个人状态。
 - 启动扫描、手动扫描、定时扫描与逐项错误报告。源文件消失或损坏时保留收藏记录并标记资源不可用。
 - 管理员密码登录、会话 Cookie、限速、限定资源的 12 小时播放票据。
-- 提供 LitePan 所需的 Emby API 子集、302 跳转、PotPlayer 协议链接、Android mpv Intent、复制链接与 M3U 下载。
+- 提供播放反代对接所需的 Emby 兼容 API 子集、302 跳转、PotPlayer 协议链接、Android mpv Intent、复制链接与 M3U 下载。
 
 ## 播放链路
 
+支持两种 STRM 302 播放方式，可按实际部署选择工具和地址。
+
 ```text
-浏览器打开 QMaxHub（8096）
-  → 选择影片及 STRM 资源
-  → 在本机打开 PotPlayer / Android mpv
-  → 请求 LitePan 反代入口（42069）的 /Videos/.../stream
-  → LitePan 读取 QMaxHub（8096）的媒体源信息
-  → LitePan 解析网盘资源并返回直链
-  → 播放器访问网盘文件
+302 反代入口：
+浏览器选择影片 → 本地播放器 → 自定义反代播放入口
+  → 反代工具读取 QMaxHub 媒体源 → 解析 STRM 并返回网盘直链
+
+STRM 地址直连：
+浏览器选择影片 → 本地播放器 → QMaxHub 签名播放地址
+  → 302 跳转到 STRM 中的 HTTP(S) 地址 → 对应服务解析或播放
 ```
 
-QMaxHub 在 `MediaSources[].Path` 中提供 STRM 内的 HTTP(S) 地址，供 LitePan 识别。它不下载媒体、不探测视频、不转码，也不提前缓存临时网盘直链。每次读取播放信息或直接跳转时都会重新读取 STRM 文件。
+QMaxHub 在 `MediaSources[].Path` 中提供 STRM 内的 HTTP(S) 地址，供兼容的反代工具识别。它不下载媒体、不探测视频、不转码，也不提前缓存临时网盘直链。每次读取播放信息或直接跳转时都会重新读取 STRM 文件。
 
-另提供「直接跳转 STRM 地址」模式，播放器先访问 QMaxHub 的签名播放地址，再由 QMaxHub 返回 302，适用于 STRM 本身已指向可直接播放的服务。
+服务访问地址、反代地址、端口和路径前缀均可配置。反代模式需要工具支持 QMaxHub 提供的 Emby 兼容接口；如果其他工具直接提供可播放的 STRM 地址，可选择 STRM 地址直连模式。
 
 ## Docker 部署
 
 需要 Docker Engine / Docker Desktop 与 Compose。
 
 1. 复制 `.env.example` 为 `.env`。
-2. 修改 `ADMIN_PASSWORD`（至少 10 个字符）、`MEDIA_PATH` 和两个访问地址。
+2. 修改 `ADMIN_PASSWORD`（至少 10 个字符）、`MEDIA_PATH` 和 `PUBLIC_URL`；使用外部反代时再填写 `PLAYBACK_PROXY_URL`。
 3. 在本项目目录执行：
 
 ```sh
 docker compose up -d --build
 ```
 
-浏览器访问 `http://服务器IP:8096`，用 `.env` 中的密码登录。启动会自动扫描一次；进入「设置与扫描」查看结果。
+浏览器访问配置的 `PUBLIC_URL`，用 `.env` 中的密码登录。启动会自动扫描一次；进入「设置与扫描」查看结果。
 
 ### 使用 GHCR 镜像
 
@@ -55,7 +57,7 @@ docker compose -f compose.ghcr.yaml pull
 docker compose -f compose.ghcr.yaml up -d
 ```
 
-Podman 使用对应的 `podman compose -f compose.ghcr.yaml` 命令。GHCR 包若为私有，需要先登录拥有该包读取权限的 GitHub 账号，或由包所有者在 GitHub Packages 中调整可见性。
+Podman 使用对应的 `podman compose -f compose.ghcr.yaml` 命令。该镜像已公开，可匿名拉取。
 
 仓库的 `Publish GHCR image` 工作流会在推送到 `main` 时运行集成测试与容器检查，通过后发布 `latest` 和 `sha-<提交短编号>`。推送 `v*` 标签时还会发布去掉 `v` 的版本标签。可以在 `.env` 中设置 `QMAXHUB_IMAGE_TAG=sha-...` 固定某次镜像。发布使用 GitHub 自动提供的临时令牌，不需要在仓库保存个人访问令牌。
 
@@ -66,34 +68,29 @@ ADMIN_PASSWORD=use-your-own-long-password
 MEDIA_PATH=D:/Media/JAV
 QMAXHUB_PORT=8096
 PUBLIC_URL=http://192.168.1.10:8096
-LITEPAN_PUBLIC_URL=http://192.168.1.10:42069
+PLAYBACK_PROXY_URL=https://proxy.example/media
 SCAN_INTERVAL=1800
 COOKIE_SECURE=false
 ```
 
 Linux / NAS 的 `MEDIA_PATH` 可以是 `/volume1/media/jav`。镜像以 UID / GID `10001:10001` 运行，需要对来源目录有读取与遍历权限。数据库默认保存在命名卷 `qmaxhub-data`；媒体目录以 `:ro` 挂载。
 
-若原 Emby 占用 8096，可先设 `QMAXHUB_PORT=8097`，同时把 `PUBLIC_URL` 和 LitePan 上游改成宿主机的 `8097`；容器内仍使用 8096。确认新库工作正常后再自行决定如何处理原 Emby。
+若原 Emby 占用 8096，可先设 `QMAXHUB_PORT=8097`，同时把 `PUBLIC_URL` 和反代工具的上游改成对应的宿主机地址。容器内部默认 8096，也可通过 `PORT` 单独配置。确认新库工作正常后再自行决定如何处理原 Emby。
 
-### LitePan 配置
+### 302 反代配置
 
-在 QMaxHub「设置与扫描 → LitePan 接入」复制 API Key，然后在 LitePan 的 Emby 反代中设置：
+在「设置与扫描 → 播放连接」选择播放方式：
 
-| 配置项 | 示例 |
-| --- | --- |
-| Emby 地址 | `http://192.168.1.10:8096` |
-| API Key | QMaxHub 页面复制出的 Key |
-| 反代端口 | `42069` |
+- **302 反代入口**：填写反代工具对外提供的完整播放地址，例如 `https://proxy.example/media` 或 `http://192.168.1.10:18443`。没有指定的必用工具或端口。
+- **STRM 地址直连（302 跳转）**：播放器先访问 QMaxHub，再由 QMaxHub 302 跳转至 STRM 内地址。适用于 STRM 本身已指向其他工具提供的播放服务。
 
-点击 LitePan 的「测试」，启用并保存。将其反代入口 `http://192.168.1.10:42069` 填入 QMaxHub 播放设置。**42069 是你配置的 Emby 反代端口，不是 LitePan 管理端口。** 请确认 LitePan 容器已映射该 TCP 端口。
+对接支持 Emby 兼容接口的工具时，在「反代工具对接」复制 API Key，将本服务可达地址设为工具的上游。工具与 QMaxHub 在同一个 Docker 网络时可使用容器名和实际内部端口；跨 Compose 项目需要加入同一网络，或使用可达的宿主机地址。播放器使用的入口必须是其设备能访问的地址。
 
-两个容器在同一个 Docker 网络时，LitePan 上游可设为 `http://qmaxhub:8096`。不同 Compose 项目默认网络不互通，需要自行接入同一网络，或使用可达的宿主机地址。播放器地址必须使用 Windows / Android 都能访问的主机名或 IP，不能填写容器名或其他设备的 `127.0.0.1`。
+如 STRM 内填写的是容器内部地址或 `127.0.0.1`，可以在「STRM 地址替换」中配置原地址前缀与替换地址。替换保留路径、查询参数和原有签名。QMaxHub 只支持 HTTP(S) 资源，不支持 `file://`、本地视频路径或 Kodi 的 `URL|Header=...` 格式。
 
-LitePan 通过 API 读取 STRM 地址，本项目不要求 LitePan 挂载同一份 STRM 目录。
+反代工具的播放拦截与认证行为由对应工具控制。QMaxHub 的播放票据不能替代反代入口的访问控制。外部工具的具体兼容性仍需按其版本联调。
 
-如果 STRM 内容是 `http://127.0.0.1:5211/...`，而播放器在其他设备，可在「STRM 地址替换」中设置旧、新地址前缀。替换不改变路径、查询参数和原有签名；路径签名仍须由 LitePan 验证。QMaxHub 只允许 HTTP(S) 资源，不支持 `file://`、本地视频文件或 Kodi 的 `URL|Header=...` 格式。
-
-> LitePan 兼容实现依据其公开的 Emby 反代接口；尚未在用户实际 LitePan 版本、网盘账号和真实播放器上完成联调。LitePan 的播放拦截与认证行为由 LitePan 控制，QMaxHub 的播放票据不能替代 LitePan 入口的访问控制。请将这两个服务限制在可信网络，跨互联网访问时应配置 HTTPS 与相应的入口控制。
+升级时会自动迁移数据库中的旧反代地址和播放模式，保留 API Key、签名密钥与收藏状态。新部署使用通用环境变量 `PLAYBACK_PROXY_URL`，也可以直接在网页中配置。
 
 ### 使用 Podman
 
@@ -119,7 +116,7 @@ Windows 的 Podman WSL 环境挂载路径请填写虚拟机可访问的路径，
 - **Android mpv**：使用 `intent://...#Intent;scheme=http(s);type=video/any;package=is.xyz.mpv;end;`，要求安装官方包名 `is.xyz.mpv` 的 mpv-android，并使用允许 Intent 跳转的浏览器。其他 mpv 分支可能需要不同包名。
 - **其他播放器**：复制 HTTP 播放链接，或下载 M3U。
 
-浏览器无法确认外部播放器是否真正启动，也无法收取它的播放进度；观看状态需要手动标记。播放链接有效期 12 小时，过期后重新打开即可。网盘的 UA、IP 或账号限制由 LitePan 和播放器实际处理，本项目不代传自定义播放请求头。
+浏览器无法确认外部播放器是否真正启动，也无法收取它的播放进度；观看状态需要手动标记。播放链接有效期 12 小时，过期后重新打开即可。网盘的 UA、IP 或账号限制由对应播放服务和播放器实际处理，本项目不代传自定义播放请求头。
 
 ## 媒体目录布局
 
@@ -159,7 +156,7 @@ Python 3.12 或更高版本：
 $env:ADMIN_PASSWORD = 'your-local-test-password'
 $env:LIBRARY_ROOTS = 'D:/Media/JAV'
 $env:PUBLIC_URL = 'http://localhost:8096'
-$env:LITEPAN_PUBLIC_URL = 'http://192.168.1.10:42069'
+$env:PLAYBACK_PROXY_URL = 'https://proxy.example/media'
 python -m qmaxhub
 ```
 
@@ -192,8 +189,8 @@ python tests/preview.py
 
 提供 `/System/Info`、`/Items/{id}`、`/Items/{id}/PlaybackInfo`、`/Items?Ids=...`、`/Videos/{id}/stream`、媒体目录列表和扫描任务接口；支持可选 `/emby` 前缀以及常见 Emby API Key 传递方式。
 
-这是供 LitePan 使用的 **Emby 接口子集**，不是完整 Emby 服务，未承诺 Emby / Infuse 等客户端完整接入。没有转码、内置播放器、刮削、多用户权限、DLNA、远程图片采集或外部播放器进度同步。
+这是供播放反代工具使用的 **Emby 兼容接口子集**，不是完整 Emby 服务，未承诺 Emby / Infuse 等客户端完整接入。没有转码、内置播放器、刮削、多用户权限、DLNA、远程图片采集或外部播放器进度同步。
 
 验证记录与实际边界见 [验证记录](docs/validation.md)。
 
-设计与接口依据：[LitePan 官方说明](https://www.litepan.top/guide/tools/enhanced.html)、[LitePan 反代实现](https://github.com/Ponphil/LitePan/blob/main/internal/embyproxy/service.go)、[mpv-android Intent 规范](https://github.com/mpv-android/mpv-android/blob/master/docs/intent.html)。
+外部播放器接口参考：[mpv-android Intent 规范](https://github.com/mpv-android/mpv-android/blob/master/docs/intent.html)。

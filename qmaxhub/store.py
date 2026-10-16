@@ -27,6 +27,11 @@ class Store:
             ''')
             for key in ('api_key', 'signing_key', 'server_id'):
                 db.execute('INSERT OR IGNORE INTO settings VALUES (?,?)', (key, json.dumps(secrets.token_hex(24))))
+            # Migrate earlier provider-specific settings without replacing newer choices.
+            db.execute("INSERT OR IGNORE INTO settings(key,value) SELECT 'proxy_url',value FROM settings WHERE key=?", ('litepan_url',))
+            db.execute('DELETE FROM settings WHERE key=?', ('litepan_url',))
+            db.execute('UPDATE settings SET value=? WHERE key=? AND value=?',
+                       (json.dumps('proxy'), 'playback_mode', json.dumps('litepan')))
 
     @contextmanager
     def connect(self):
