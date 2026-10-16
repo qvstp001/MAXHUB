@@ -46,6 +46,19 @@ docker compose up -d --build
 
 浏览器访问 `http://服务器IP:8096`，用 `.env` 中的密码登录。启动会自动扫描一次；进入「设置与扫描」查看结果。
 
+### 使用 GHCR 镜像
+
+镜像地址：`ghcr.io/qvstp001/qmaxhub:latest`，当前发布平台为 Linux / amd64。准备同样的 `.env`，使用预构建镜像启动：
+
+```sh
+docker compose -f compose.ghcr.yaml pull
+docker compose -f compose.ghcr.yaml up -d
+```
+
+Podman 使用对应的 `podman compose -f compose.ghcr.yaml` 命令。GHCR 包若为私有，需要先登录拥有该包读取权限的 GitHub 账号，或由包所有者在 GitHub Packages 中调整可见性。
+
+仓库的 `Publish GHCR image` 工作流会在推送到 `main` 时运行集成测试与容器检查，通过后发布 `latest` 和 `sha-<提交短编号>`。推送 `v*` 标签时还会发布去掉 `v` 的版本标签。可以在 `.env` 中设置 `QMAXHUB_IMAGE_TAG=sha-...` 固定某次镜像。发布使用 GitHub 自动提供的临时令牌，不需要在仓库保存个人访问令牌。
+
 示例配置：
 
 ```dotenv

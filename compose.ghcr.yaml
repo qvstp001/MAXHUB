@@ -1,0 +1,31 @@
+services:
+  qmaxhub:
+    image: ghcr.io/qvstp001/qmaxhub:${QMAXHUB_IMAGE_TAG:-latest}
+    container_name: qmaxhub
+    restart: unless-stopped
+    ports:
+      - "${QMAXHUB_PORT:-8096}:8096"
+    environment:
+      TZ: Asia/Shanghai
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 设置管理员密码}
+      DATA_DIR: /data
+      LIBRARY_ROOTS: /media
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8096}
+      LITEPAN_PUBLIC_URL: ${LITEPAN_PUBLIC_URL:-}
+      SCAN_INTERVAL: ${SCAN_INTERVAL:-1800}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - qmaxhub-data:/data
+      - ${MEDIA_PATH:-./media}:/media:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-m", "qmaxhub.healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 15s
+      retries: 3
+volumes:
+  qmaxhub-data:
