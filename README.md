@@ -82,6 +82,22 @@ LitePan 通过 API 读取 STRM 地址，本项目不要求 LitePan 挂载同一�
 
 > LitePan 兼容实现依据其公开的 Emby 反代接口；尚未在用户实际 LitePan 版本、网盘账号和真实播放器上完成联调。LitePan 的播放拦截与认证行为由 LitePan 控制，QMaxHub 的播放票据不能替代 LitePan 入口的访问控制。请将这两个服务限制在可信网络，跨互联网访问时应配置 HTTPS 与相应的入口控制。
 
+### 使用 Podman
+
+已在 Windows + Podman 5.6.0 / WSL Linux amd64 上验证镜像构建、Compose 启动、健康检查及容器重建后的数据保留。
+
+虚拟机未启动时先执行 `podman machine start`。准备好 `.env` 后运行：
+
+```sh
+podman compose up -d --build
+```
+
+Windows 的 Podman WSL 环境挂载路径请填写虚拟机可访问的路径，例如宿主机 `D:/Media/JAV` 对应 `.env` 中的 `MEDIA_PATH=/mnt/d/Media/JAV`。Docker Desktop 仍使用前文的 Windows 路径示例。
+
+如果单独使用 `podman build`，建议使用 `podman build --format docker -t qmaxhub .` 保留镜像健康检查。Compose 已显式定义同一检查，因此不依赖镜像格式是否保留它。
+
+本次测试遇到 WSL 虚拟机继承的 `127.0.0.1:7897` 代理不可达；单次拉取时清除代理环境变量后成功下载 Python 基础镜像。遇到同类下载错误时，应先检查虚拟机的代理可达性。
+
 ### 本地播放器
 
 进入影片详情，选择资源，点击「选择播放器」，再点击对应播放器链接。
@@ -139,6 +155,17 @@ python -m qmaxhub
 ```sh
 python -m unittest discover -s tests -v
 ```
+
+容器验收可先用 `python tests/container_smoke.py prepare .test-data/container-smoke/media` 生成独立虚构媒体，再将该目录只读挂载到测试容器的 `/media`。它包含一部 `SMOKE-001` 影片、两个 STRM 和本地图片。只对该隔离测试库运行以下检查：
+
+```powershell
+$env:QMAXHUB_TEST_PASSWORD = 'your-isolated-container-password'
+python tests/container_smoke.py check http://127.0.0.1:18097
+# 重建容器后，先验证此前写入的状态仍在
+python tests/container_smoke.py check http://127.0.0.1:18097 --expect-persisted
+```
+
+检查只验证 STRM 的 302 跳转，不会访问占位播放地址或真实网盘。
 
 打开虚构资料预览（不读取真实媒体，不包含有效视频地址）：
 

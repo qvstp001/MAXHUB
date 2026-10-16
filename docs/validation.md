@@ -14,9 +14,25 @@
 - 390 × 844 手机视口：底部导航、双列海报及搜索控件正常显示，页面未出现横向溢出。桌面视图正常显示侧边导航与多列海报。
 - 截图为虚构 NFO 和程序生成的抽象海报，不是用户真实媒体库。
 
+## Podman 容器验收
+
+本机 Windows + Podman 5.6.0，WSL Linux / amd64，容器内 Python 3.13.16；Compose 使用 Docker Compose v5.5.0，通过 Podman 的 Docker 兼容接口运行。
+
+- 项目 Dockerfile 已实际构建成功，且通过 `podman compose up --build --force-recreate` 完成构建与启动。
+- 修复了基础镜像已有 `/media` 时普通 `mkdir` 导致构建失败的问题。
+- 健康检查改为 `python -m qmaxhub.healthcheck`，避免 Podman Docker 兼容接口拆分含空格的 `python -c` 参数。Compose 也显式定义健康检查，避免默认 OCI 镜像格式忽略 Dockerfile 中的健康检查。
+- 最终容器状态为 `running / healthy`；检查模块在不可达端口正确以状态码 1 退出。
+- Linux 镜像内以默认非 root 用户运行现有 9 项集成测试，全部通过。
+- Windows 宿主机到容器完成 18 项 HTTP 检查，覆盖登录、匿名访问拒绝、手动扫描、中文元数据、双资源归并、海报和剧照、收藏 / 已看 / 评分、媒体源接口、签名 302、HEAD 与外部播放器链接。
+- 重建容器后，先验证原有收藏、已看状态和评分仍存在，再执行接口检查，确认命名数据卷持久化有效。
+- 媒体来自独立虚构目录，只读挂载；容器实测 `media_writable=False`。运行 UID 与数据库所有者均为 10001，`CapEff=0`，`NoNewPrivs=1`。
+- 测试容器 `qmaxhub-container-test` 仅绑定 `127.0.0.1:18097`，数据卷 `qmaxhub-smoke_qmaxhub-data`。没有接入真实媒体或 LitePan。
+
+可复用的测试资料生成与 HTTP 检查脚本：`tests/container_smoke.py`。本机隔离 Compose 参数保存在被 Git 忽略的 `.test-data/container-smoke/`，不上传测试密码与本机路径。
+
 ## 未验证
 
-- 当前环境未安装 Docker CLI / Docker Engine，未执行镜像构建或容器启动验证。Dockerfile、Compose 与健康检查已提供。
+- 未在独立 Docker Engine 上重复验收；上述构建、Compose 与运行验证使用 Podman 的 Docker 兼容接口完成。
 - 未连接用户实际 LitePan 实例或网盘账号。兼容接口依据 LitePan 公开实现编写，自动化测试验证了本项目的接口合同，不能代替实际 LitePan 版本联调。
 - 未实际唤起 Windows PotPlayer 或 Android mpv 播放真实影片。已验证生成链接的格式及 QMaxHub 端的跳转行为，设备上的协议注册、Intent 支持、网盘 UA / IP 约束仍需实机确认。
 - 未进行大规模媒体库性能或跨平台容器验收。
