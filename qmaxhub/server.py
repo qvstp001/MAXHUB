@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from . import __version__
-from .scanner import IMAGE_EXT, Scanner, bounded, strm_target
+from .scanner import IMAGE_EXT, MEDIA_EXT, VIDEO_EXT, Scanner, bounded, strm_target
 from .store import Store
 
 WEB = Path(__file__).resolve().parent.parent / 'web'
@@ -43,7 +43,7 @@ class App:
         if len(password) < 10:
             raise ValueError('ADMIN_PASSWORD 至少需要 10 个字符')
         self.store = Store(data)
-        self.scanner = Scanner(self.store, roots)
+        self.scanner = Scanner(self.store, self.store.get('roots', roots))
         self.password_hash = hashlib.scrypt(password.encode(), salt=b'qmaxhub-login-v1', n=16384, r=8, p=1)
         fingerprint = hmac.new(self.store.get('signing_key').encode(), self.password_hash, hashlib.sha256).hexdigest()
         if self.store.get('password_fingerprint') != fingerprint:
@@ -77,7 +77,8 @@ class App:
         return {**{k: self.store.get(k) for k in keys}, 'roots': [str(r) for r in self.scanner.roots], 'version': __version__}
 
     def save_settings(self, values):
-        allowed = {'public_url', 'proxy_url', 'playback_mode', 'rewrite_from', 'rewrite_to', 'scan_interval'}
+        values = dict(values)
+        allowed = {'public_url', 'proxy_url', 'playback_mode', 'rewrite_from', 'rewrite_to', 'scan_interval', 'roots'}
         if set(values) - allowed:
             raise ValueError('包含不能修改的设置')
         for key in ('public_url', 'proxy_url', 'rewrite_from', 'rewrite_to'):
@@ -92,13 +93,62 @@ class App:
             raise ValueError('地址替换的来源和目标需要同时填写')
         if type(merged['scan_interval']) is not int or not 0 <= merged['scan_interval'] <= 604800:
             raise ValueError('扫描间隔应为 0–604800 秒，0 表示关闭')
-        self.store.put(values)
+        if 'roots' not in values:
+            self.store.put(values)
+            return
+        roots = values['roots']
+        if not isinstance(roots, list) or len(roots) > 64 or any(not isinstance(r, str) or not r.strip() for r in roots):
+            raise ValueError('媒体来源必须是目录列表，最多 64 项；清空列表可移除全部来源')
+        paths = []
+        for value in roots:
+            path = Path(value.strip()).expanduser()
+            if not path.is_absolute():
+                raise ValueError('媒体来源必须使用绝对路径')
+            try:
+                path = path.resolve()
+                if not path.is_dir():
+                    raise ValueError(f'目录不存在或不可访问：{path}')
+                # Check traversal permission without loading a potentially large directory.
+                with os.scandir(path) as entries:
+                    next(entries, None)
+            except OSError as error:
+                raise ValueError(f'无法读取媒体目录：{path}') from error
+            if path not in paths:
+                paths.append(path)
+        values['roots'] = [str(p) for p in paths]
+        if not self.scanner.lock.acquire(blocking=False):
+            raise ValueError('正在扫描，请等待扫描完成后再修改媒体来源')
+        try:
+            with self.store.connect() as db:
+                db.executemany('INSERT OR REPLACE INTO settings VALUES (?,?)',
+                               [(key, json.dumps(value, ensure_ascii=False)) for key, value in values.items()])
+                for row in db.execute('SELECT DISTINCT root FROM resources').fetchall():
+                    if Path(row['root']) not in paths:
+                        db.execute('UPDATE resources SET available=0 WHERE root=?', (row['root'],))
+            self.scanner.roots = paths
+        finally:
+            self.scanner.lock.release()
 
-    def source(self, resource):
+    def media_path(self, resource):
         root = Path(resource['root'])
         if root not in self.scanner.roots:
             raise ValueError('媒体目录已不在当前配置内')
-        target = strm_target(bounded(resource['path'], root))
+        path = bounded(resource['path'], root)
+        if path.suffix.lower() not in MEDIA_EXT:
+            raise ValueError('不支持的媒体文件格式')
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        return path
+
+    def stream_url(self, movie_id, resource_id):
+        params = urlencode({'MediaSourceId': resource_id, 'Static': 'true', 'play_token': self.ticket(movie_id, resource_id)})
+        return f'{self.store.get("public_url")}/Videos/{movie_id}/stream?{params}'
+
+    def source(self, resource):
+        path = self.media_path(resource)
+        if path.suffix.lower() in VIDEO_EXT:
+            return self.stream_url(resource['movie_id'], resource['id'])
+        target = strm_target(path)
         old, new = self.store.get('rewrite_from'), self.store.get('rewrite_to')
         if old and (target == old or target.startswith(old + '/') or target.startswith(old + '?')):
             target = new + target[len(old):]
@@ -111,7 +161,10 @@ class App:
                     cover=prefix + '/cover' if movie['cover'] else None,
                     samples=[f'{prefix}/sample/{i}' for i in range(len(movie['samples']))],
                     actors=[{**a, 'thumb': f'{prefix}/actor/{i}' if a['thumb'] else None} for i, a in enumerate(movie['actors'])],
-                    resources=[{'id': r['id'], 'name': Path(r['path']).name, 'root': r['root'], 'available': bool(r['available'])} for r in movie['resources']])
+                    resources=[{'id': r['id'], 'name': Path(r['path']).name, 'root': r['root'],
+                                'format': Path(r['path']).suffix[1:].upper(),
+                                'kind': 'strm' if Path(r['path']).suffix.lower() == '.strm' else 'local',
+                                'available': bool(r['available'])} for r in movie['resources']])
         return item
 
     def emby_item(self, movie):
@@ -124,7 +177,8 @@ class App:
             except (ValueError, OSError):
                 continue
             sources.append({'Id': r['id'], 'Name': Path(r['path']).stem, 'Path': target,
-                            'Protocol': 'Http', 'IsRemote': True, 'Container': 'mp4', 'Type': 'Default',
+                            'Protocol': 'Http', 'IsRemote': True,
+                            'Container': Path(r['path']).suffix[1:].lower() if Path(r['path']).suffix.lower() in VIDEO_EXT else 'mp4', 'Type': 'Default',
                             'SupportsDirectPlay': True, 'SupportsDirectStream': True, 'SupportsTranscoding': False,
                             'MediaStreams': [], 'RunTimeTicks': int(movie['runtime'] * 60 * 10000000),
                             'DirectStreamUrl': f'/Videos/{movie["id"]}/stream?MediaSourceId={r["id"]}'})
@@ -180,6 +234,48 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(result, dict):
             raise ValueError('请求体必须是 JSON 对象')
         return result
+
+    def send_video(self, path):
+        with path.open('rb') as stream:
+            size = os.fstat(stream.fileno()).st_size
+            start, end, status = 0, size - 1, 200
+            requested = self.headers.get('Range')
+            if requested:
+                match = re.fullmatch(r'bytes=(\d*)-(\d*)', requested.strip())
+                valid = bool(match and any(match.groups()) and size)
+                if valid:
+                    first, last = match.groups()
+                    if first:
+                        start = int(first)
+                        end = min(int(last), size - 1) if last else size - 1
+                    else:
+                        suffix = int(last)
+                        start = max(0, size - suffix)
+                        valid = suffix > 0
+                    valid = valid and 0 <= start <= end < size
+                if not valid:
+                    return self.send(416, headers={'Content-Range': f'bytes */{size}', 'Accept-Ranges': 'bytes'})
+                status = 206
+            length = max(0, end - start + 1)
+            self.send_response(status)
+            self.send_header('Content-Type', mimetypes.guess_type(path)[0] or 'application/octet-stream')
+            self.send_header('Content-Length', str(length))
+            self.send_header('Accept-Ranges', 'bytes')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            if status == 206:
+                self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
+            self.end_headers()
+            if self.command == 'HEAD':
+                return
+            stream.seek(start)
+            while length:
+                chunk = stream.read(min(length, 1024 * 1024))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                length -= len(chunk)
 
     def session(self):
         cookie = SimpleCookie()
@@ -260,6 +356,9 @@ class Handler(BaseHTTPRequestHandler):
             resource = self.app.store.resource(resource_id)
             if not resource or resource['movie_id'] != movie_id or not resource['available']:
                 return self.send(404, {'error': '播放资源不可用'})
+            file = self.app.media_path(resource)
+            if file.suffix.lower() in VIDEO_EXT:
+                return self.send_video(file)
             return self.send(302, headers={'Location': self.app.source(resource)})
         if path.lower() == '/system/info/public' and not post:
             return self.send(body={'ServerName': 'QMaxHub', 'Version': __version__, 'Id': self.app.store.get('server_id')})
@@ -346,13 +445,15 @@ class Handler(BaseHTTPRequestHandler):
                 if not resource:
                     return self.send(404, {'error': '没有可播放资源，请重新扫描'})
                 self.app.source(self.app.store.resource(resource['id']))
-                base = self.app.store.get('proxy_url') if self.app.store.get('playback_mode') == 'proxy' else self.app.store.get('public_url')
-                params = urlencode({'MediaSourceId': resource['id'], 'Static': 'true', 'play_token': self.app.ticket(movie['id'], resource['id'])})
-                play_url = f'{base}/Videos/{movie["id"]}/stream?{params}'
+                local = Path(resource['path']).suffix.lower() in VIDEO_EXT
+                play_url = self.app.stream_url(movie['id'], resource['id'])
+                if not local and self.app.store.get('playback_mode') == 'proxy':
+                    play_url = self.app.store.get('proxy_url') + play_url[len(self.app.store.get('public_url')):]
                 self.app.store.state(movie['id'], {'last_played': time.time()})
                 parts = urlsplit(play_url)
                 intent = f'intent://{parts.netloc}{parts.path}?{parts.query}#Intent;scheme={parts.scheme};type=video/any;package=is.xyz.mpv;end;'
-                return self.send(body={'url': play_url, 'potplayer': 'potplayer://' + play_url, 'mpv': intent, 'expires_in': 43200})
+                return self.send(body={'url': play_url, 'potplayer': 'potplayer://' + play_url, 'mpv': intent,
+                                       'kind': 'local' if local else 'strm', 'expires_in': 43200})
             if not match[2] and not post:
                 return self.send(body=self.app.public_movie(movie))
         asset = re.fullmatch(r'/api/assets/([^/]+)/(poster|cover|sample|actor)(?:/(\d+))?', path)

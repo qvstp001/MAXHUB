@@ -10,6 +10,9 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'}
+VIDEO_EXT = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v',
+             '.ts', '.m2ts', '.mts', '.mpg', '.mpeg', '.vob', '.3gp', '.ogv'}
+MEDIA_EXT = VIDEO_EXT | {'.strm'}
 
 
 def identity(value):
@@ -142,7 +145,7 @@ class Scanner:
                         directories[:] = [d for d in directories if not d.startswith('.')]
                         files = [Path(folder) / f for f in filenames]
                         lookup = {p.name.casefold(): p for p in files}
-                        streams = [p for p in files if p.suffix.lower() == '.strm']
+                        streams = [p for p in files if p.suffix.lower() in MEDIA_EXT]
                         for stream in streams:
                             resource_id = identity(str(root) + '/' + stream.relative_to(root).as_posix())
                             try:
@@ -157,7 +160,8 @@ class Scanner:
                                     candidates = [p for p in files if p.suffix.lower() == '.nfo']
                                     nfo = candidates[0] if len(candidates) == 1 else None
                                 metadata = nfo_metadata(nfo, root, stream.stem, files)
-                                target = strm_target(stream)
+                                # Native videos are opened only when played; never load them during scanning.
+                                target = strm_target(stream) if stream.suffix.lower() == '.strm' else ''
                                 movie_id = identity('code:' + metadata['code'] if metadata['code'] else 'path:' + resource_id)
                                 with self.store.connect() as db:
                                     db.execute('INSERT INTO movies VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata',

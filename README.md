@@ -1,12 +1,13 @@
 # QMaxHub
 
-面向 STRM 与本地 NFO 的私人影片资料库。浏览器管理，Docker 常驻运行，Windows PotPlayer / Android mpv 外部播放。
+面向本地视频、STRM 与本地 NFO 的私人影片资料库。浏览器管理，支持本机 Python 或 Docker 运行，Windows PotPlayer / Android mpv 外部播放。
 
 当前为 **0.1.1 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
 
 ## 已实现
 
-- 递归扫描多个来源目录中的 `.strm`，读取同名 NFO、分段共用 NFO、`movie.nfo`。
+- 在网页添加、修改、移除媒体来源目录，重启后保留配置。递归扫描 STRM 以及 MP4、MKV、AVI、MOV、WMV、FLV、WebM、M4V、TS、M2TS、MTS、MPG、MPEG、VOB、3GP、OGV，读取同名 NFO、分段共用 NFO、`movie.nfo`；无 NFO 时使用文件名。
+- 本地视频通过带签名的 HTTP 链接提供原文件，支持 GET、HEAD 与单段 Range 请求，供外部播放器拖动进度，不转码。STRM 继续支持 302 直连和反代入口。
 - 提取番号、片名、简介、发行日期、时长、制作商、导演、系列、评分、标签与演员。
 - 读取本地海报、封面、演员头像与剧照；支持 `poster`、`fanart`、`.actors`、`extrafanart`、`screenshots`、`javdex-samples`。
 - 同番号的多个文件归并为一部影片，详情中选择具体资源。
@@ -151,6 +152,22 @@ JAV/
 ## 本地开发与验证
 
 Python 3.12 或更高版本：
+
+Windows 无需 Docker，在 PowerShell 中运行：
+
+```powershell
+.\start-local.ps1
+# 自定义密码 / 端口 / Python 路径：
+.\start-local.ps1 -Password 'your-local-test-password' -Port 18096 -Python 'C:/Python312/python.exe'
+```
+
+默认访问 `http://127.0.0.1:18096`，本机试用密码为 `local-only-123`；仅监听本机。脚本优先使用已安装的 Python，也可使用 Codex 桌面应用已提供的 Python 运行时。数据保存在项目的 `data/` 中，按 Ctrl+C 停止。脚本不自动读取 `.env`。
+
+进入「设置与扫描 → 媒体来源」，每行填写一个完整目录（例如 `F:/Media`），点击「保存来源并扫描」。可以混合添加视频和 STRM 目录，无需修改源文件或重启服务。保存时检查目录可读性；扫描运行时需要等待完成再改来源。移除来源后原资源标记为不可用，收藏、已看及评分保留；重新添加并扫描可恢复。浏览器选择的路径必须属于运行服务的电脑；Docker 部署填写容器内已挂载的路径。
+
+网页保存的来源列表优先于 `LIBRARY_ROOTS`，包括显式清空列表。播放设置同样在首次运行时初始化，之后在网页中修改。局域网播放器需要服务监听可达网卡，并在「播放连接」填写设备可访问的服务地址；本机脚本默认只供当前电脑验证。本地视频始终由 QMaxHub 提供，不经过 STRM 反代入口，实际格式和编码解码能力由外部播放器决定。
+
+也可直接通过环境变量运行：
 
 ```powershell
 $env:ADMIN_PASSWORD = 'your-local-test-password'

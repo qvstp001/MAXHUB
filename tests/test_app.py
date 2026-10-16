@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from qmaxhub.scanner import bounded, nfo_metadata, strm_target
+from qmaxhub.scanner import VIDEO_EXT, bounded, nfo_metadata, strm_target
 from qmaxhub.server import App, make_server
 
 NFO = '''<?xml version="1.0" encoding="UTF-8"?><movie>
@@ -267,6 +267,132 @@ class AppTest(unittest.TestCase):
         self.assertEqual(migrated.settings()['proxy_url'], 'https://new-proxy.example:19443/media')
         self.assertEqual(migrated.settings()['playback_mode'], 'direct')
         self.assertIsNone(migrated.store.get('litepan_url'))
+
+    def test_edit_sources_persist_and_preserve_collection(self):
+        self.assertEqual(self.request('/api/settings', {'roots': []})[0], 401)
+        self.login()
+        old = self.movie()
+        self.app.store.state(old['id'], {'favorite': True, 'rating': 5})
+        old_link = urlsplit(self.request(f'/api/movies/{old["id"]}/play', {})[2]['url'])
+        other = Path(self.temp.name) / 'another library'
+        other.mkdir()
+        (other / 'Local movie.MP4').write_bytes(b'local-video')
+        status, _, settings = self.request('/api/settings', {'roots': [str(other), str(other)]})
+        self.assertEqual(status, 200)
+        self.assertEqual(settings['roots'], [str(other.resolve())])
+        self.assertFalse(self.app.store.movie(old['id'])['available'])
+        self.assertEqual(self.request(old_link.path + '?' + old_link.query)[0], 404)
+        self.scan()
+        movies = self.request('/api/movies')[2]['items']
+        self.assertEqual(len(movies), 2)
+        local = next(m for m in movies if m['title'] == 'Local movie')
+        self.assertTrue(local['available'])
+        self.assertEqual(local['resources'][0]['format'], 'MP4')
+        restarted = App(Path(self.temp.name) / 'data', [self.root], 'test-password-123')
+        self.assertEqual(restarted.scanner.roots, [other.resolve()])
+        self.assertEqual(self.request('/api/settings', {'roots': []})[0], 200)
+        self.assertTrue(all(not m['available'] for m in self.app.store.movies()))
+        empty_restart = App(Path(self.temp.name) / 'data', [self.root], 'test-password-123')
+        self.assertEqual(empty_restart.scanner.roots, [])
+        self.assertEqual(self.request('/api/settings', {'roots': [str(self.root)]})[0], 200)
+        self.scan()
+        restored = self.app.store.movie(old['id'])
+        self.assertTrue(restored['available'])
+        self.assertTrue(restored['favorite'])
+        self.assertEqual(restored['rating'], 5)
+
+    def test_source_validation_and_scan_conflict(self):
+        self.login()
+        before = self.app.settings()['roots']
+        for roots in ('text', None, [123], [''], ['relative/path'], [str(self.root / 'missing')],
+                      [str(self.folder / 'movie.nfo')]):
+            with self.subTest(roots=roots):
+                self.assertEqual(self.request('/api/settings', {'roots': roots})[0], 400)
+                self.assertEqual(self.app.settings()['roots'], before)
+        self.app.scanner.lock.acquire()
+        try:
+            self.assertEqual(self.request('/api/settings', {'roots': []})[0], 400)
+            self.assertEqual(self.app.settings()['roots'], before)
+        finally:
+            self.app.scanner.lock.release()
+
+    def test_local_formats_and_shared_metadata(self):
+        self.login()
+        for ext in VIDEO_EXT:
+            (self.folder / ('DEMO-001' + ext.upper())).write_bytes(b'video')
+        # With multiple titles in one directory, movie.nfo must not be borrowed.
+        (self.folder / 'movie.nfo').rename(self.folder / 'DEMO-001.nfo')
+        (self.folder / 'unrelated.mp4').write_bytes(b'other')
+        (self.folder / 'ignored.txt').write_text('not video')
+        self.scan()
+        self.assertEqual(self.app.scanner.status['errors'], [])
+        movie = next(m for m in self.app.store.movies() if m['code'] == 'DEMO-001')
+        self.assertEqual(len(movie['resources']), len(VIDEO_EXT) + 2)
+        self.assertEqual(movie['title'], '示例 & 收藏')
+        unrelated = next(m for m in self.app.store.movies() if m['title'] == 'unrelated')
+        self.assertEqual(unrelated['code'], '')
+        self.assertEqual(len(self.app.store.movies()), 2)
+        key = self.app.store.get('api_key')
+        sources = self.request(f'/Items/{movie["id"]}/PlaybackInfo?api_key={key}', {})[2]['MediaSources']
+        native = [s for s in sources if s['Id'] in {r['id'] for r in movie['resources'] if Path(r['path']).suffix.lower() in VIDEO_EXT}]
+        self.assertEqual({s['Container'] for s in native}, {ext[1:] for ext in VIDEO_EXT})
+        for source in native:
+            url = urlsplit(source['Path'])
+            self.assertEqual(self.request(url.path + '?' + url.query)[2], b'video')
+
+    def test_native_video_range_auth_and_missing_file(self):
+        video = self.root / 'local sample.mp4'
+        content = bytes(range(256)) * 32
+        video.write_bytes(content)
+        self.scan()
+        self.login()
+        movie = next(m for m in self.app.store.movies() if m['title'] == 'local sample')
+        links = self.request(f'/api/movies/{movie["id"]}/play', {})[2]
+        # Local files bypass the STRM proxy even when proxy mode is selected.
+        self.assertTrue(links['url'].startswith('http://192.168.1.10:8096/'))
+        self.assertEqual(links['kind'], 'local')
+        url = urlsplit(links['url'])
+        path = url.path + '?' + url.query
+        resource_id = movie['resources'][0]['id']
+        self.cookie = ''
+        self.assertEqual(self.request(url.path + '?MediaSourceId=' + resource_id)[0], 401)
+        status, headers, body = self.request(path)
+        self.assertEqual(status, 200)
+        self.assertEqual(body, content)
+        self.assertEqual(headers['Content-Type'], 'video/mp4')
+        self.assertEqual(headers['Accept-Ranges'], 'bytes')
+        self.assertEqual(int(headers['Content-Length']), len(content))
+        cases = [('bytes=10-19', 10, 19), ('bytes=8000-', 8000, 8191),
+                 ('bytes=-23', 8169, 8191), ('bytes=8180-99999', 8180, 8191),
+                 ('bytes=-99999', 0, 8191)]
+        for requested, start, end in cases:
+            with self.subTest(range=requested):
+                status, headers, body = self.request(path, headers={'Range': requested})
+                self.assertEqual(status, 206)
+                self.assertEqual(body, content[start:end + 1])
+                self.assertEqual(headers['Content-Range'], f'bytes {start}-{end}/{len(content)}')
+        status, headers, body = self.request(path, method='HEAD', headers={'Range': 'bytes=5-9'})
+        self.assertEqual(status, 206)
+        self.assertEqual(body, b'')
+        self.assertEqual(headers['Content-Length'], '5')
+        for requested in ('bytes=99999-', 'bytes=5-2', 'bytes=-0', 'bytes=-', 'bytes=0-1,3-4'):
+            status, headers, _ = self.request(path, headers={'Range': requested})
+            self.assertEqual(status, 416)
+            self.assertEqual(headers['Content-Range'], 'bytes */8192')
+        video.write_bytes(b'')
+        status, headers, body = self.request(path)
+        self.assertEqual((status, headers['Content-Length'], body), (200, '0', b''))
+        self.assertEqual(self.request(path, headers={'Range': 'bytes=0-'})[0], 416)
+        # Stale/tampered resource paths cannot expose files outside the configured root.
+        outside = Path(self.temp.name) / 'private.mp4'
+        outside.write_bytes(b'private')
+        with self.app.store.connect() as db:
+            db.execute('UPDATE resources SET path=? WHERE id=?', (str(outside), resource_id))
+        self.assertEqual(self.request(path)[0], 400)
+        with self.app.store.connect() as db:
+            db.execute('UPDATE resources SET path=? WHERE id=?', (str(video), resource_id))
+        video.unlink()
+        self.assertEqual(self.request(path)[0], 404)
 
 
 if __name__ == '__main__':
