@@ -4,6 +4,7 @@ import os
 import threading
 
 from .server import App, make_server
+from . import DEFAULT_ADMIN_PASSWORD
 
 
 def main():
@@ -12,7 +13,7 @@ def main():
     # JSON supports Windows paths without overloading drive-letter colons.
     roots = json.loads(roots_value) if roots_value.startswith('[') else roots_value.split(';')
     port = int(os.getenv('PORT', '8096'))
-    app = App(os.getenv('DATA_DIR', './data'), roots, os.getenv('ADMIN_PASSWORD', ''),
+    app = App(os.getenv('DATA_DIR', './data'), roots, os.getenv('ADMIN_PASSWORD') or DEFAULT_ADMIN_PASSWORD,
               os.getenv('PUBLIC_URL') or f'http://localhost:{port}',
               os.getenv('PLAYBACK_PROXY_URL', os.getenv('LITEPAN_PUBLIC_URL', '')))
     stop = threading.Event()

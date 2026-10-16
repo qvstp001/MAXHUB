@@ -62,6 +62,17 @@ jobs:
           docker restart qmaxhub-ci
           python3 tests/container_smoke.py check http://127.0.0.1:18097 --expect-persisted
 
+      - name: Test default initial password
+        run: |
+          docker run -d --name qmaxhub-default-ci \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --publish 127.0.0.1:18098:8096 \
+            --env PUBLIC_URL=http://127.0.0.1:18098 --env SCAN_INTERVAL=0 \
+            --mount "type=bind,src=$PWD/.test-data/container-smoke/media,dst=/media,readonly" \
+            "$IMAGE:$IMAGE_SHA"
+          QMAXHUB_TEST_PASSWORD=qmaxhub123456 python3 tests/container_smoke.py check http://127.0.0.1:18098
+          docker exec qmaxhub-default-ci python -m qmaxhub.healthcheck
+
       - name: Log in to GHCR
         env:
           GHCR_USER: ${{ github.actor }}
@@ -83,4 +94,6 @@ jobs:
 
       - name: Show container logs on failure
         if: failure()
-        run: docker logs --tail 100 qmaxhub-ci || true
+        run: |
+          docker logs --tail 100 qmaxhub-ci || true
+          docker logs --tail 100 qmaxhub-default-ci || true

@@ -7,7 +7,7 @@ services:
       - "${QMAXHUB_PORT:-8096}:${PORT:-8096}"
     environment:
       TZ: Asia/Shanghai
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 设置管理员密码}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-qmaxhub123456}
       DATA_DIR: /data
       LIBRARY_ROOTS: /media
       PORT: ${PORT:-8096}

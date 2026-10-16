@@ -2,7 +2,7 @@
 
 面向本地视频、STRM 与本地 NFO 的私人影片资料库。浏览器管理，支持本机 Python 或 Docker 运行，Windows PotPlayer / Android mpv 外部播放。
 
-当前为 **0.1.1 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
+当前为 **0.1.2 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
 
 ## 已实现
 
@@ -40,14 +40,14 @@ QMaxHub 在 `MediaSources[].Path` 中提供 STRM 内的 HTTP(S) 地址，供兼�
 需要 Docker Engine / Docker Desktop 与 Compose。
 
 1. 复制 `.env.example` 为 `.env`。
-2. 修改 `ADMIN_PASSWORD`（至少 10 个字符）、`MEDIA_PATH` 和 `PUBLIC_URL`；使用外部反代时再填写 `PLAYBACK_PROXY_URL`。
+2. 修改 `MEDIA_PATH` 和 `PUBLIC_URL`；使用外部反代时再填写 `PLAYBACK_PROXY_URL`。`ADMIN_PASSWORD` 可选，未设置或留空时使用默认初始密码 `qmaxhub123456`；自定义密码至少 10 个字符。
 3. 在本项目目录执行：
 
 ```sh
 docker compose up -d --build
 ```
 
-浏览器访问配置的 `PUBLIC_URL`，用 `.env` 中的密码登录。启动会自动扫描一次；进入「设置与扫描」查看结果。
+浏览器访问配置的 `PUBLIC_URL`，用自定义密码或默认初始密码 `qmaxhub123456` 登录。启动会自动扫描一次；进入「设置与扫描」查看结果。后续通过 `ADMIN_PASSWORD` 设置自定义密码并重建容器即可更换，已有自定义密码优先，不会被默认值覆盖。
 
 ### 使用 GHCR 镜像
 
@@ -59,6 +59,8 @@ docker compose -f compose.ghcr.yaml up -d
 ```
 
 Podman 使用对应的 `podman compose -f compose.ghcr.yaml` 命令。该镜像已公开，可匿名拉取。
+
+使用 NAS 的 Docker 图形界面部署时，镜像已提供默认初始密码 `qmaxhub123456`，无需手动添加密码变量。设置端口映射、媒体目录到 `/media` 的只读挂载，以及 `/data` 的持久化挂载即可。要使用自己的密码，再添加或修改 `ADMIN_PASSWORD`。
 
 仓库的 `Publish GHCR image` 工作流会在推送到 `main` 时运行集成测试与容器检查，通过后发布 `latest` 和 `sha-<提交短编号>`。推送 `v*` 标签时还会发布去掉 `v` 的版本标签。可以在 `.env` 中设置 `QMAXHUB_IMAGE_TAG=sha-...` 固定某次镜像。发布使用 GitHub 自动提供的临时令牌，不需要在仓库保存个人访问令牌。
 
@@ -77,6 +79,28 @@ COOKIE_SECURE=false
 Linux / NAS 的 `MEDIA_PATH` 可以是 `/volume1/media/jav`。镜像以 UID / GID `10001:10001` 运行，需要对来源目录有读取与遍历权限。数据库默认保存在命名卷 `qmaxhub-data`；媒体目录以 `:ro` 挂载。
 
 若原 Emby 占用 8096，可先设 `QMAXHUB_PORT=8097`，同时把 `PUBLIC_URL` 和反代工具的上游改成对应的宿主机地址。容器内部默认 8096，也可通过 `PORT` 单独配置。确认新库工作正常后再自行决定如何处理原 Emby。
+
+### NAS 的运行用户与目录权限
+
+镜像默认以 `10001:10001` 运行。部分 NAS 的用户空间权限规则需要容器使用拥有来源目录访问权限的 NAS 用户。先在 NAS 上用 `id` 查询 UID/GID，再在 Docker 图形界面的运行用户字段填写对应值；Compose 可在服务中添加：
+
+```yaml
+services:
+  qmaxhub:
+    user: "1000:1001"
+```
+
+`1000:1001` 仅为示例，实际值以 NAS 账号为准。镜像使用 Docker 的运行用户配置，不解析 `PUID` / `PGID` 环境变量。
+
+更换运行用户后，`/data` 的目录和数据库文件也需要属于该用户。先停止使用该数据卷的应用，再用一次性容器调整实际数据卷的属主，例如：
+
+```sh
+docker run --rm --network none --user 0:0 \
+  --mount type=volume,src=qmaxhub-data,dst=/data \
+  ghcr.io/qvstp001/qmaxhub:latest chown -R 1000:1001 /data
+```
+
+这里的 `qmaxhub-data` 必须替换成正在使用的数据卷名称（Compose 创建的名称通常带项目前缀）；更新服务时继续挂载原卷。媒体目录保持只读，并在网页中填写容器内的 `/media/...` 路径。
 
 ### 302 反代配置
 
