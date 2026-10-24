@@ -1,0 +1,28 @@
+name: qmaxhub-peach-strm
+
+services:
+  peach:
+    image: qmaxhub-peach-strm:0.46.1
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 75s
+    user: "${PEACH_UID:-1000}:${PEACH_GID:-1000}"
+    ports:
+      - "${PEACH_BIND:-127.0.0.1}:${PEACH_PORT:-18100}:8900"
+    environment:
+      PEACH_STRM_FAKE_IP_ORIGINS: "${PEACH_STRM_FAKE_IP_ORIGINS:-}"
+    volumes:
+      - type: bind
+        source: ${PEACH_DATA_ROOT:?请配置独立数据目录}
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PEACH_MEDIA_ROOT:?请配置现有STRM目录}
+        target: /media
+        read_only: true
+        bind:
+          create_host_path: false

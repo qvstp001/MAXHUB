@@ -1,237 +1,145 @@
-# QMaxHub
+<p align="center">
+  <img src="resources/peach-logo.png" alt="Peach" width="96">
+</p>
+
+<h1 align="center">Peach</h1>
+
+> 本仓库的 `codex/peach-strm` 分支提供 Peach STRM 定制版，包含 302 直连、PotPlayer、Android mpv 和独立 NAS Docker 部署模板。开始使用请看 [STRM Docker 部署](docs/STRM_DOCKER.md)。原 QMaxHub 保留在 `main` 分支。
 
-面向本地视频、STRM 与本地 NFO 的私人影片资料库。浏览器管理，支持本机 Python 或 Docker 运行，Windows PotPlayer / Android mpv 外部播放。
+<p align="center">给自己用的私人影片馆藏：本地硬盘、网盘和关注的创作者，放在一个地方看。</p>
 
-当前为 **0.1.2 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
+<p align="center">
+  <a href="https://peach.video">官网</a> ·
+  <a href="https://github.com/peach-mitao/peach/releases">下载安装包</a> ·
+  <a href="https://demo.peach.video">在线演示</a> ·
+  <a href="https://github.com/peach-mitao/peach/releases/tag/intro-video">介绍视频</a> ·
+  <a href="https://github.com/peach-mitao/peach/issues">问题反馈</a> ·
+  <a href="https://github.com/orgs/peach-mitao/projects/7/views/1">需求看板</a> ·
+  <a href="https://github.com/orgs/peach-mitao/projects/7/views/3">路线图</a> ·
+  <a href="#文档">文档</a> ·
+  <a href="README.en.md">English</a>
+</p>
 
-## 已实现
+<p align="center">
+  <a href="https://github.com/peach-mitao/peach/releases"><img src="https://img.shields.io/github/v/release/peach-mitao/peach?include_prereleases&amp;filter=v*&amp;sort=semver&amp;display_name=tag" alt="release"></a>
+  <a href="https://github.com/peach-mitao/peach/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/peach-mitao/peach/test.yml?branch=master&amp;label=tests&amp;logo=githubactions&amp;logoColor=white" alt="CI 状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue?logo=gnu&amp;logoColor=white" alt="license"></a>
+  <a href="docs/TESTING_DESKTOP.md"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
+  <a href="docs/OPERATIONS.md#macos-独立测试包"><img src="https://img.shields.io/badge/macOS-DMG-555555?logo=apple&amp;logoColor=white" alt="macOS 独立应用构建与安装"></a>
+  <img src="https://img.shields.io/badge/18%2B-adult%20content-critical" alt="18+ 成人内容">
+</p>
 
-- 在网页添加、修改、移除媒体来源目录，重启后保留配置。递归扫描 STRM 以及 MP4、MKV、AVI、MOV、WMV、FLV、WebM、M4V、TS、M2TS、MTS、MPG、MPEG、VOB、3GP、OGV，读取同名 NFO、分段共用 NFO、`movie.nfo`；无 NFO 时使用文件名。
-- 本地视频通过带签名的 HTTP 链接提供原文件，支持 GET、HEAD 与单段 Range 请求，供外部播放器拖动进度，不转码。STRM 继续支持 302 直连和反代入口。
-- 提取番号、片名、简介、发行日期、时长、制作商、导演、系列、评分、标签与演员。
-- 读取本地海报、封面、演员头像与剧照；支持 `poster`、`fanart`、`.actors`、`extrafanart`、`screenshots`、`javdex-samples`。
-- 同番号的多个文件归并为一部影片，详情中选择具体资源。
-- 搜索、排序、横竖封面切换、演员 / 标签 / 系列 / 制作商导航。
-- 收藏、手动已看标记、个人评分持久保存；重新扫描不覆盖个人状态。
-- 启动扫描、手动扫描、定时扫描与逐项错误报告。源文件消失或损坏时保留收藏记录并标记资源不可用。
-- 管理员密码登录、会话 Cookie、限速、限定资源的 12 小时播放票据。
-- 提供播放反代对接所需的 Emby 兼容 API 子集、302 跳转、PotPlayer 协议链接、Android mpv Intent、复制链接与 M3U 下载。
+https://github.com/user-attachments/assets/a5610874-e611-41bb-be22-7d99f0d64b62
 
-## 播放链路
+> **18+** 仅供成年人管理自己的成人内容馆藏。仓库不含媒体或站点数据；连接外部站点需有相应账号和访问权。
 
-支持两种 STRM 302 播放方式，可按实际部署选择工具和地址。
+## 能做什么
 
-```text
-302 反代入口：
-浏览器选择影片 → 本地播放器 → 自定义反代播放入口
-  → 反代工具读取 QMaxHub 媒体源 → 解析 STRM 并返回网盘直链
+- **本地、网盘一起看**：硬盘与已挂载的 115、PikPak、OneDrive 等网盘汇成一个馆藏。
+- **播放墙挑片**：拖动全屏封面墙，点开原位播放；同一番号的不同版本与分卷集中切换。
+- **播放器字幕**：加载本地字幕，按番号搜索 SubtitleCat 简繁中文字幕并选择加载，调整字体、字号、颜色与背景。在线搜索无需 API Key，来源可能包含机翻。
+- **STRM 外部播放**：支持 302 直连或 Peach 代理，可用 PotPlayer、Android mpv 及 M3U 播放列表打开；见[外部播放器](docs/EXTERNAL_PLAYERS.md)。
+- **接手已有收藏**：直接读取 NFO 和海报，缺少的标题、女优、厂牌与封面可从多个来源补齐，保留手动修改。
+- **跨站关注**：同一创作者在 FANBOX、Patreon、Kemono 等站点的更新汇到一起，同一作品合成一张卡。
+- **追新作、找想看的**：按女优订阅新作，按口味发现作品，用「想要」清单留住待找的片子。
+- **云下载**：按番号查找资源或粘贴磁力，提交到 115 或 PikPak，落地后自动整理入库。
+- **浏览器添加 JAV**：在 JavDB、MissAV、Jable 等站点识别或选中番号，一键交给 Peach 云下载入库。[用户脚本](https://github.com/peach-mitao/peach-userscript)独立维护，见[安装与配对](docs/JAV_BROWSER.md)。
+- **口味**：结合观看、反馈、馆藏、浏览历史、书签与关注关系分析偏好。一次读取本机浏览器的历史和书签，也可导入 HTML 书签或 Chromium Bookmarks JSON；来源可停止读取或删除。见[口味数据来源](docs/TASTE_SOURCES.md)。
 
-STRM 地址直连：
-浏览器选择影片 → 本地播放器 → QMaxHub 签名播放地址
-  → 302 跳转到 STRM 中的 HTTP(S) 地址 → 对应服务解析或播放
-```
+观看记录、收藏和设置保存在本机。扫描不动原文件；手动整理先预览，可撤回上一批。
 
-QMaxHub 在 `MediaSources[].Path` 中提供 STRM 内的 HTTP(S) 地址，供兼容的反代工具识别。它不下载媒体、不探测视频、不转码，也不提前缓存临时网盘直链。每次读取播放信息或直接跳转时都会重新读取 STRM 文件。
+扫描、关注更新和新作资料采集会保存进度，应用重启后继续处理未完成的项目。恢复范围见[断点续跑](docs/OPERATIONS.md#长时任务断点续跑)。
 
-服务访问地址、反代地址、端口和路径前缀均可配置。反代模式需要工具支持 QMaxHub 提供的 Emby 兼容接口；如果其他工具直接提供可播放的 STRM 地址，可选择 STRM 地址直连模式。
+「发送版本统计与错误诊断（推荐）」默认勾选，可在安装、首次设置或设置页取消。两类技术事件由同一开关控制，已保存的关闭选择会保留。启用后向 Sentry 发送页面列出的技术字段，不自动上传完整日志、诊断 ZIP、媒体信息或观看记录。见[远程诊断说明](docs/DIAGNOSTICS.md#可选远程诊断)。
 
-## Docker 部署
+馆藏与口味明细上传在安装器和设置页另设独立选项，默认关闭。设置页先展示完整字段与本机预览，经明确同意后，每周上传作品、标签、评分、观看汇总及全部偏好维度的明细；不含账号、设备或安装标识。明细仍有跨次关联与再识别风险，接收服务可见连接 IP。见[馆藏与口味群体研究](docs/DIAGNOSTICS.md#馆藏与口味群体研究)。
 
-需要 Docker Engine / Docker Desktop 与 Compose。
+## 截图
 
-1. 复制 `.env.example` 为 `.env`。
-2. 修改 `MEDIA_PATH` 和 `PUBLIC_URL`；使用外部反代时再填写 `PLAYBACK_PROXY_URL`。`ADMIN_PASSWORD` 可选，未设置或留空时使用默认初始密码 `qmaxhub123456`；自定义密码至少 10 个字符。
-3. 在本项目目录执行：
+[在线演示](https://demo.peach.video) 可直接体验搜索、筛选和资料页，操作不会保存。点击截图查看原图。
 
-```sh
-docker compose up -d --build
-```
+<table>
+  <tr>
+    <td width="50%"><a href="https://peach.video/assets/screenshots/home-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/home-20261014.webp" alt="馆藏：首页筛选与作品卡片" width="600"></a></td>
+    <td width="50%"><a href="https://peach.video/assets/screenshots/profile-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/profile-20261014.webp" alt="女优页：人像、资料与全部作品" width="600"></a></td>
+  </tr>
+  <tr>
+    <td align="center">馆藏：按人物、来源和标签找片</td>
+    <td align="center">女优页：资料、别名和全部作品</td>
+  </tr>
+  <tr>
+    <td><a href="https://peach.video/assets/screenshots/follow-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/follow-20261014.webp" alt="关注：创作者导航与图片更新" width="600"></a></td>
+    <td><a href="https://peach.video/assets/screenshots/stats-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/stats-20261014.webp" alt="统计：馆藏、存储与内容分布" width="600"></a></td>
+  </tr>
+  <tr>
+    <td align="center">关注：创作者的跨站更新</td>
+    <td align="center">统计：片子存在哪、看了多少</td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="https://peach.video/assets/screenshots/wall-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/wall-20261014-readme.webp" alt="播放墙：全屏作品封面与浏览控件" width="1200"></a></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">播放墙：拖动挑片，原位播放</td>
+  </tr>
+</table>
 
-浏览器访问配置的 `PUBLIC_URL`，用自定义密码或默认初始密码 `qmaxhub123456` 登录。启动会自动扫描一次；进入「设置与扫描」查看结果。后续通过 `ADMIN_PASSWORD` 设置自定义密码并重建容器即可更换，已有自定义密码优先，不会被默认值覆盖。
+## 下载与使用
 
-### 使用 GHCR 镜像
+### Windows
 
-镜像地址：`ghcr.io/qvstp001/qmaxhub:latest`，当前发布平台为 Linux / amd64。准备同样的 `.env`，使用预构建镜像启动：
+1. 从 [Releases](https://github.com/peach-mitao/peach/releases) 下载完整安装包 `Peach-<版本>-windows-x64-setup.exe`，双击安装，无需管理员权限；也可下载完整免安装包，解压后运行 `Peach.exe`。
+2. 浏览器打开首次设置页后，选择媒体目录和访问范围。
+3. 开始扫描，随后在浏览器里浏览和播放。
 
-```sh
-docker compose -f compose.ghcr.yaml pull
-docker compose -f compose.ghcr.yaml up -d
-```
+完整安装包携带媒体工具，可离线安装；轻量安装包体积更小，安装时按需下载工具。
 
-Podman 使用对应的 `podman compose -f compose.ghcr.yaml` 命令。该镜像已公开，可匿名拉取。
+测试版尚未签名。若 Windows 提示「已保护你的电脑」，确认来自本项目的 Release，再点「更多信息 → 仍要运行」。安装、更新和故障排查见 [Windows 使用说明](docs/TESTING_DESKTOP.md)。
 
-使用 NAS 的 Docker 图形界面部署时，镜像已提供默认初始密码 `qmaxhub123456`，无需手动添加密码变量。设置端口映射、媒体目录到 `/media` 的只读挂载，以及 `/data` 的持久化挂载即可。要使用自己的密码，再添加或修改 `ADMIN_PASSWORD`。
+### macOS 本机构建
 
-仓库的 `Publish GHCR image` 工作流会在推送到 `main` 时运行集成测试与容器检查，通过后发布 `latest` 和 `sha-<提交短编号>`。推送 `v*` 标签时还会发布去掉 `v` 的版本标签。可以在 `.env` 中设置 `QMAXHUB_IMAGE_TAG=sha-...` 固定某次镜像。发布使用 GitHub 自动提供的临时令牌，不需要在仓库保存个人访问令牌。
+macOS 可在本机构建独立 `.app` 与 DMG，运行不需要 Python、源码或另一台电脑。构建与安装见 [macOS 独立测试包](docs/OPERATIONS.md#macos-独立测试包)。
 
-示例配置：
+发版流程分别生成 Apple Silicon（`macos-arm64.dmg`）与 Intel（`macos-x86_64.dmg`）测试包；可下载版本以 [Releases](https://github.com/peach-mitao/peach/releases) 的实际资产为准。在「关于本机」确认芯片，打开对应镜像并将 Peach 拖入「应用程序」。测试包未完成 Apple 公证，媒体工具需另行准备。
 
-```dotenv
-ADMIN_PASSWORD=use-your-own-long-password
-MEDIA_PATH=D:/Media/JAV
-QMAXHUB_PORT=8096
-PUBLIC_URL=http://192.168.1.10:8096
-PLAYBACK_PROXY_URL=https://proxy.example/media
-SCAN_INTERVAL=1800
-COOKIE_SECURE=false
-```
+### 从源码运行（Windows、macOS）
 
-Linux / NAS 的 `MEDIA_PATH` 可以是 `/volume1/media/jav`。镜像以 UID / GID `10001:10001` 运行，需要对来源目录有读取与遍历权限。数据库默认保存在命名卷 `qmaxhub-data`；媒体目录以 `:ro` 挂载。
+需要 Git、uv 和 Python 3.14 或更高，步骤见[源码运行](docs/OPERATIONS.md#从源码运行windowsmacos)。
 
-若原 Emby 占用 8096，可先设 `QMAXHUB_PORT=8097`，同时把 `PUBLIC_URL` 和反代工具的上游改成对应的宿主机地址。容器内部默认 8096，也可通过 `PORT` 单独配置。确认新库工作正常后再自行决定如何处理原 Emby。
+### Docker（VPS / NAS）
 
-### NAS 的运行用户与目录权限
+部署步骤与支持范围见 [Docker 部署](docs/DOCKER.md)。
 
-镜像默认以 `10001:10001` 运行。部分 NAS 的用户空间权限规则需要容器使用拥有来源目录访问权限的 NAS 用户。先在 NAS 上用 `id` 查询 UID/GID，再在 Docker 图形界面的运行用户字段填写对应值；Compose 可在服务中添加：
+## 常见问题
 
-```yaml
-services:
-  qmaxhub:
-    user: "1000:1001"
-```
+- **会改我的文件吗？** 扫描、补资料不碰原文件。手动整理会改名或移动；清空回收站会删除文件，资源同步中的清理会删除空目录，均需确认。
+- **支持哪些网盘？** 通过 CloudDrive2 等工具挂载为本地目录的网盘，详见[网盘挂载](docs/CLOUDDRIVE.md)；云下载支持 115 和 PikPak，登录令牌保存在本机。
+- **手机上怎么看？** 首次设置时允许同一局域网的设备访问，手机连同一网络，打开设置页给出的地址，并设置访问密码。
+- **数据存在哪？** 本机的 `peach-data` 文件夹；Windows 版默认位于 `%LOCALAPPDATA%\Peach\peach-data`。
 
-`1000:1001` 仅为示例，实际值以 NAS 账号为准。镜像使用 Docker 的运行用户配置，不解析 `PUID` / `PGID` 环境变量。
+## 问题反馈
 
-更换运行用户后，`/data` 的目录和数据库文件也需要属于该用户。先停止使用该数据卷的应用，再用一次性容器调整实际数据卷的属主，例如：
+先查看[用户反馈](https://github.com/peach-mitao/peach/issues)，或[提交问题](https://github.com/peach-mitao/peach/issues/new/choose)，附上版本、操作步骤、预期与实际结果。截图请遮掉凭据、局域网地址和完整路径，不要上传数据库或媒体；安全问题按[安全政策](SECURITY.md)私下报告。
 
-```sh
-docker run --rm --network none --user 0:0 \
-  --mount type=volume,src=qmaxhub-data,dst=/data \
-  ghcr.io/qvstp001/qmaxhub:latest chown -R 1000:1001 /data
-```
+## 文档
 
-这里的 `qmaxhub-data` 必须替换成正在使用的数据卷名称（Compose 创建的名称通常带项目前缀）；更新服务时继续挂载原卷。媒体目录保持只读，并在网页中填写容器内的 `/media/...` 路径。
+[运行与配置](docs/OPERATIONS.md) · [来源采集](docs/SOURCING.md) · [外部播放器](docs/EXTERNAL_PLAYERS.md) · [变更日志](CHANGELOG.md)
 
-### 302 反代配置
+参与开发：[开发约定](AGENTS.md) · [测试与依赖](docs/TESTING.md)
 
-在「设置与扫描 → 播放连接」选择播放方式：
+## 相关项目
 
-- **302 反代入口**：填写反代工具对外提供的完整播放地址，例如 `https://proxy.example/media` 或 `http://192.168.1.10:18443`。没有指定的必用工具或端口。
-- **STRM 地址直连（302 跳转）**：播放器先访问 QMaxHub，再由 QMaxHub 302 跳转至 STRM 内地址。适用于 STRM 本身已指向其他工具提供的播放服务。
+感谢 [amane](https://github.com/sqzw-x/amane)、[Gfriends](https://github.com/gfriends/gfriends)、[CloudDrive2](https://www.clouddrive2.com/) 等项目，完整致谢与复用说明见[复用清单](docs/REUSE.md)。
 
-对接支持 Emby 兼容接口的工具时，在「反代工具对接」复制 API Key，将本服务可达地址设为工具的上游。工具与 QMaxHub 在同一个 Docker 网络时可使用容器名和实际内部端口；跨 Compose 项目需要加入同一网络，或使用可达的宿主机地址。播放器使用的入口必须是其设备能访问的地址。
+## Star 历史
 
-如 STRM 内填写的是容器内部地址或 `127.0.0.1`，可以在「STRM 地址替换」中配置原地址前缀与替换地址。替换保留路径、查询参数和原有签名。QMaxHub 只支持 HTTP(S) 资源，不支持 `file://`、本地视频路径或 Kodi 的 `URL|Header=...` 格式。
+<a href="https://www.star-history.com/?repos=peach-mitao%2Fpeach&amp;type=date&amp;logscale=&amp;releases=&amp;legend=top-left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=peach-mitao/peach&amp;type=date&amp;theme=dark&amp;logscale&amp;legend=top-left">
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=peach-mitao/peach&amp;type=date&amp;logscale&amp;legend=top-left">
+    <img alt="Peach Star 历史" src="https://api.star-history.com/svg?repos=peach-mitao/peach&amp;type=date&amp;logscale&amp;legend=top-left">
+  </picture>
+</a>
 
-反代工具的播放拦截与认证行为由对应工具控制。QMaxHub 的播放票据不能替代反代入口的访问控制。外部工具的具体兼容性仍需按其版本联调。
+## 许可证
 
-升级时会自动迁移数据库中的旧反代地址和播放模式，保留 API Key、签名密钥与收藏状态。新部署使用通用环境变量 `PLAYBACK_PROXY_URL`，也可以直接在网页中配置。
-
-### 使用 Podman
-
-已在 Windows + Podman 5.6.0 / WSL Linux amd64 上验证镜像构建、Compose 启动、健康检查及容器重建后的数据保留。
-
-虚拟机未启动时先执行 `podman machine start`。准备好 `.env` 后运行：
-
-```sh
-podman compose up -d --build
-```
-
-Windows 的 Podman WSL 环境挂载路径请填写虚拟机可访问的路径，例如宿主机 `D:/Media/JAV` 对应 `.env` 中的 `MEDIA_PATH=/mnt/d/Media/JAV`。Docker Desktop 仍使用前文的 Windows 路径示例。
-
-如果单独使用 `podman build`，建议使用 `podman build --format docker -t qmaxhub .` 保留镜像健康检查。Compose 已显式定义同一检查，因此不依赖镜像格式是否保留它。
-
-本次测试遇到 WSL 虚拟机继承的 `127.0.0.1:7897` 代理不可达；单次拉取时清除代理环境变量后成功下载 Python 基础镜像。遇到同类下载错误时，应先检查虚拟机的代理可达性。
-
-### 本地播放器
-
-进入影片详情，选择资源，点击「选择播放器」，再点击对应播放器链接。
-
-- **Windows PotPlayer**：需要已安装 PotPlayer，并为浏览器注册 `potplayer://` 协议处理程序。不同安装方式不一定自动注册；如果浏览器没有唤起播放器，可下载 M3U 后用 PotPlayer 打开，或复制播放链接到 PotPlayer 的「打开链接」。
-- **Android mpv**：使用 `intent://...#Intent;scheme=http(s);type=video/any;package=is.xyz.mpv;end;`，要求安装官方包名 `is.xyz.mpv` 的 mpv-android，并使用允许 Intent 跳转的浏览器。其他 mpv 分支可能需要不同包名。
-- **其他播放器**：复制 HTTP 播放链接，或下载 M3U。
-
-浏览器无法确认外部播放器是否真正启动，也无法收取它的播放进度；观看状态需要手动标记。播放链接有效期 12 小时，过期后重新打开即可。网盘的 UA、IP 或账号限制由对应播放服务和播放器实际处理，本项目不代传自定义播放请求头。
-
-## 媒体目录布局
-
-```text
-JAV/
-  ABC-123/
-    ABC-123.strm
-    ABC-123.nfo            # 或 movie.nfo
-    ABC-123-poster.jpg     # 或 poster.jpg / folder.jpg
-    ABC-123-fanart.jpg     # 或 fanart.jpg / ABC-123-landscape.jpg
-    .actors/
-      演员名字.jpg
-    extrafanart/
-      1.jpg
-      2.jpg
-```
-
-优先读取和 STRM 同名的 NFO；`ABC-123-CD1.strm` 也可读取 `ABC-123.nfo`。仅单影片目录或相同分段名目录使用共用 `movie.nfo`；单 STRM 目录还可匹配唯一 NFO，避免误用其他影片资料。
-
-图片支持 JPG、JPEG、PNG、WebP、GIF、AVIF（显示能力取决于浏览器）。只读取媒体根目录内的本地文件；NFO 中的远程图片引用不会自动下载。NFO 使用 UTF-8 / UTF-8 BOM，每个文件上限 2 MiB，不允许 DTD 或实体声明。
-
-来源目录为只读，应用不修改 STRM、NFO 或图片。缺失标记以完整成功遍历的目录为依据；目录访问错误会记录异常，不把访问失败直接当成文件被删除。扫描是全量元数据重读，未实现文件监听或增量指纹加速。
-
-## 数据与配置
-
-`/data/qmaxhub.sqlite3` 保存索引、用户状态、会话、API Key 与签名密钥。备份时停止容器，再备份整个数据卷，避免遗漏 SQLite 的 WAL 文件；来源媒体目录独立备份。不要删除数据卷来更新程序。
-
-首次启动用环境变量初始化播放设置。之后网页中保存的配置优先，不会被每次重启覆盖。更改播放地址或扫描周期请在网页保存。修改 `ADMIN_PASSWORD` 后重建容器，已有登录会话失效。
-
-多目录可修改 Compose 的挂载项，并将环境变量 `LIBRARY_ROOTS` 设为 `/media-a;/media-b`，或 JSON 数组。不同库中相同番号会合并为一部影片的多个资源。
-
-## 本地开发与验证
-
-Python 3.12 或更高版本：
-
-Windows 无需 Docker，在 PowerShell 中运行：
-
-```powershell
-.\start-local.ps1
-# 自定义密码 / 端口 / Python 路径：
-.\start-local.ps1 -Password 'your-local-test-password' -Port 18096 -Python 'C:/Python312/python.exe'
-```
-
-默认访问 `http://127.0.0.1:18096`，本机试用密码为 `local-only-123`；仅监听本机。脚本优先使用已安装的 Python，也可使用 Codex 桌面应用已提供的 Python 运行时。数据保存在项目的 `data/` 中，按 Ctrl+C 停止。脚本不自动读取 `.env`。
-
-进入「设置与扫描 → 媒体来源」，每行填写一个完整目录（例如 `F:/Media`），点击「保存来源并扫描」。可以混合添加视频和 STRM 目录，无需修改源文件或重启服务。保存时检查目录可读性；扫描运行时需要等待完成再改来源。移除来源后原资源标记为不可用，收藏、已看及评分保留；重新添加并扫描可恢复。浏览器选择的路径必须属于运行服务的电脑；Docker 部署填写容器内已挂载的路径。
-
-网页保存的来源列表优先于 `LIBRARY_ROOTS`，包括显式清空列表。播放设置同样在首次运行时初始化，之后在网页中修改。局域网播放器需要服务监听可达网卡，并在「播放连接」填写设备可访问的服务地址；本机脚本默认只供当前电脑验证。本地视频始终由 QMaxHub 提供，不经过 STRM 反代入口，实际格式和编码解码能力由外部播放器决定。
-
-也可直接通过环境变量运行：
-
-```powershell
-$env:ADMIN_PASSWORD = 'your-local-test-password'
-$env:LIBRARY_ROOTS = 'D:/Media/JAV'
-$env:PUBLIC_URL = 'http://localhost:8096'
-$env:PLAYBACK_PROXY_URL = 'https://proxy.example/media'
-python -m qmaxhub
-```
-
-运行自动化测试：
-
-```sh
-python -m unittest discover -s tests -v
-```
-
-容器验收可先用 `python tests/container_smoke.py prepare .test-data/container-smoke/media` 生成独立虚构媒体，再将该目录只读挂载到测试容器的 `/media`。它包含一部 `SMOKE-001` 影片、两个 STRM 和本地图片。只对该隔离测试库运行以下检查：
-
-```powershell
-$env:QMAXHUB_TEST_PASSWORD = 'your-isolated-container-password'
-python tests/container_smoke.py check http://127.0.0.1:18097
-# 重建容器后，先验证此前写入的状态仍在
-python tests/container_smoke.py check http://127.0.0.1:18097 --expect-persisted
-```
-
-检查只验证 STRM 的 302 跳转，不会访问占位播放地址或真实网盘。
-
-打开虚构资料预览（不读取真实媒体，不包含有效视频地址）：
-
-```sh
-python tests/preview.py
-```
-
-访问 `http://127.0.0.1:18096`，密码 `preview-only-123`。数据与抽象示例海报写入 `.test-data/preview`，与实际应用数据隔离。此预览只监听本机。
-
-## 当前兼容范围
-
-提供 `/System/Info`、`/Items/{id}`、`/Items/{id}/PlaybackInfo`、`/Items?Ids=...`、`/Videos/{id}/stream`、媒体目录列表和扫描任务接口；支持可选 `/emby` 前缀以及常见 Emby API Key 传递方式。
-
-这是供播放反代工具使用的 **Emby 兼容接口子集**，不是完整 Emby 服务，未承诺 Emby / Infuse 等客户端完整接入。没有转码、内置播放器、刮削、多用户权限、DLNA、远程图片采集或外部播放器进度同步。
-
-验证记录与实际边界见 [验证记录](docs/validation.md)。
-
-外部播放器接口参考：[mpv-android Intent 规范](https://github.com/mpv-android/mpv-android/blob/master/docs/intent.html)。
+[AGPL-3.0-or-later](LICENSE) · Copyright (C) 2026 longmeidao。第三方组件保留各自的许可证。
