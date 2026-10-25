@@ -20,6 +20,7 @@ export interface PanelSettings {
   sidebarOrder: string[];
   batchSize: number;
   posterWidth?: number;
+  bannerWidth?: number;
   defaultSort: string;
   defaultSortDirection: string;
   groupCollapse: boolean;
@@ -46,7 +47,7 @@ export type SettingsEffect =
   | 'glowFrame'
   /** 光晕的开关、颜色、恢复默认与松手：侧栏那一层、其余玻璃面和侧栏配色钮一起对齐。 */
   | 'glow'
-  | 'batchSize' | 'posterWidth' | 'defaultSort' | 'sortDirection' | 'hoverDelay' | 'seekSeconds'
+  | 'batchSize' | 'posterWidth' | 'bannerWidth' | 'defaultSort' | 'sortDirection' | 'hoverDelay' | 'seekSeconds'
   | 'groupCollapse' | 'feedAutoScroll' | 'feedCompilations' | 'miniplayer' | 'javImage'
   | 'searchHistoryLimit';
 

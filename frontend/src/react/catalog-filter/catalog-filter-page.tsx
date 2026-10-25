@@ -17,7 +17,8 @@ import { LibraryShortcuts } from '../library-shortcuts/shortcut-controls';
 import { FolderBrowseToggle } from '../catalog-folders/catalog-folders-page';
 import { useCatalogView } from '../catalog-grid/catalog-view';
 import { CatalogViewToggle } from '../catalog-grid/catalog-view-toggle';
-import { PosterSize } from '../components/poster-size';
+import { CardSize } from '../components/card-size';
+import { imageWidth } from '../../appearance/card-size';
 import { Combo, Segments, Shuffle, SortKeys } from '../entity-filter/entity-filter-page';
 import {
   EMPTY_SLOTS, ROW_AHEAD, ROW_BATCH, ROW_FIRST, type CatalogFilterProps, type CatalogTag, type TierKind,
@@ -212,8 +213,9 @@ function Head({ count, refreshing, layout, sorts, actions }: CatalogFilterProps)
         {/* 按名字换键：JAV 与首页各一组，React Aria 的单选组挂上之后不改 `name`。 */}
         {layout && view === 'cards' ? <Segments key={layout.name} name={layout.name} label={layout.label} value={layout.value} options={layout.options}
           onChange={actions.setLayout} /> : null}
-        {layout?.value === 'big' && view === 'cards' ? <PosterSize value={layout.posterWidth || 180}
-          onChange={value => actions.setPosterWidth?.(value)} /> : null}
+        {layout && view === 'cards' ? <CardSize mode={layout.value === 'big' ? 'big' : 'small'}
+          value={imageWidth(layout.value === 'big' ? 'big' : 'small', layout)}
+          onChange={value => actions.setCardWidth?.(layout.value === 'big' ? 'big' : 'small', value)} /> : null}
         <CatalogViewToggle />
         <FolderBrowseToggle />
         {view === 'cards' ? <SortKeys sorts={sorts} onSort={actions.setSort} /> : null}

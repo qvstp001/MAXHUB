@@ -58,6 +58,7 @@ export interface CatalogLayout {
   value: string;
   options: readonly SegmentOption[];
   posterWidth?: number;
+  bannerWidth?: number;
 }
 
 export interface CatalogFilterActions {
@@ -75,7 +76,7 @@ export interface CatalogFilterActions {
   /** 换一批：网格与三层成员一起换，换批键转圈到这个 Promise 落定。 */
   reshuffle(): Promise<void>;
   setLayout(value: string): void;
-  setPosterWidth?(value: number): void;
+  setCardWidth?(mode: 'big' | 'small', value: number): void;
   /** 某一排手上这份摆完了，要下一页。返回空数组就是到底了。 */
   moreTops(kind: TierKind): Promise<TierPerformer[] | TierStudio[]>;
 }

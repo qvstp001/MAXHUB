@@ -180,7 +180,7 @@ Peach 播放器皮肤直接装饰 Video.js 10 的 light DOM：右侧控制组用
 
 迅雷接口模型参考 [MeiamSubtitles](https://github.com/91270/MeiamSubtitles/tree/b0427939fad525a19dd738b57fd23c2842490dfd) 的 `Jellyfin.MeiamSub.Thunder/ThunderProvider.cs`（Apache-2.0；持续维护的 Emby／Jellyfin C# 插件，不能直接作为 Python 依赖；只核对协议，不复制代码）。查询使用 `https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=...`，下载仅允许 `subtitle.v.geilijiasu.com` 的固定哈希路径和 HTTPS；不计算 STRM 文件或远程影片哈希。保留来源语言标注，支持 SRT／ASS／SSA／VTT。2026-10-25 使用公开影片 Big Buck Bunny 实测检索、单文件下载和 WebVTT 转换，得到 237 条时间轴；片名结果仍需用户选择匹配版本。候选 `thunder-subtitle-srt==1.4.4` 支持 Python 3.10+，依赖 requests，但 PyPI 未声明许可证和源码地址，CLI 的目录扫描与落盘不属于播放需求，因此未引入；旧 ThunderSubs 已归档并标注接口不可用，未采用。
 
-两来源的番号检索共用 `catalog_rules` 的规范化、查询变体和发行身份比较，按六条分页、最多 60 条；保留片名关键词。下载限制为 4 MiB，重定向逐跳校验固定主机与路径。ASSRT 不接入；JavSub.ai 的下载实证返回 403，未作为在线来源。本地横幅发现复用 `library_nfo.SidecarIndex` 和媒体引擎的授权路径解析，列表按页共用目录索引，图片仍在展示时按需读取。海报尺寸复用 `dialSliderHtml`、`wireDialSlider` 和外观设置存储。番号自然排序使用 Python 标准库 `re` 分段，通过 [SQLite 自定义排序规则](https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.create_collation) 在分页前排序；不引入自然排序依赖。
+两来源的番号检索共用 `catalog_rules` 的规范化、查询变体和发行身份比较，按六条分页、最多 60 条；保留片名关键词。下载限制为 4 MiB，重定向逐跳校验固定主机与路径。ASSRT 不接入；JavSub.ai 的下载实证返回 403，未作为在线来源。本地横幅发现复用 `library_nfo.SidecarIndex` 和媒体引擎的授权路径解析，列表按页共用目录索引，图片仍在展示时按需读取。横幅与海报尺寸复用 `dialSliderHtml`、`wireDialSlider` 和外观设置存储，范围由同一份规格供网格、拉条、数值设置及偏好归一化使用，宽度分别保存。番号自然排序使用 Python 标准库 `re` 分段，通过 [SQLite 自定义排序规则](https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.create_collation) 在分页前排序；不引入自然排序依赖。
 
 ## 分级诊断
 

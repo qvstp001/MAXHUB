@@ -8,6 +8,7 @@
  * 下排。无限滚动见下面的 `LoadMore`：哨兵进入视口 320px
  * 内自动取下一页，点它等于手动取；失败在哨兵后面留一条可重试的 Note，之后只有手动才重试。 */
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { imageWidth } from '../../appearance/card-size';
 import { useInfiniteQuery, type InfiniteData, type QueryKey } from '@tanstack/react-query';
 import { mixFace as mixArtwork, mixLabel, relayoutCovers, type Artwork } from '@peach/card-art';
 import { requestErrorMessage } from '@peach/legacy/core';
@@ -159,7 +160,7 @@ function GridBody(props: CatalogGridProps) {
       <>
         <div data-media-sections="" data-select-mode={props.selectMode ? '' : undefined}
           data-card-mode={!trash && layout.active ? layout.size === 'big' ? 'poster' : 'banner' : undefined}
-          style={{ '--catalog-poster-width': `${Math.min(260, Math.max(140, layout.posterWidth || 180))}px` } as CSSProperties}>
+          style={{ '--catalog-card-width': `${imageWidth(layout.size, layout)}px` } as CSSProperties}>
           {splitSections(tiles, cuts).map((section) => (
             <Fragment key={section.start}>
               <div data-media-grid="" data-catalog-view-mode="cards">{section.tiles.map(card)}</div>

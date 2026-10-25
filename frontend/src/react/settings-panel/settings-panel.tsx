@@ -429,6 +429,10 @@ function BrowseGroup({ host: current, tab, epoch }: GroupProps) {
         <NumberSetting key={epoch} id="posterWidthSetting" label="海报尺寸" value={settings.posterWidth ?? 180}
           onApply={value => { settings.posterWidth = value; save(); current.changed('posterWidth') }} />
       </Row>
+      <Row title="横幅尺寸">
+        <NumberSetting key={epoch} id="bannerWidthSetting" label="横幅尺寸" value={settings.bannerWidth ?? 320}
+          onApply={value => { settings.bannerWidth = value; save(); current.changed('bannerWidth') }} />
+      </Row>
       <PlaybackRows host={current} epoch={epoch} />
     </Group>
   );

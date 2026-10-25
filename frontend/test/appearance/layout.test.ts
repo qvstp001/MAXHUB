@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDensity, currentDensity, paintPhotoSizeButton, toggleDensity } from '../../src/appearance/density';
 import {
   cardLayoutFor, cardRatio, COVER_FRONT_RATIO, gridLayout, photoLayout, photoSize, storePhotoLayout, storePhotoSize,
-  storeVideoLayout, posterWidth, JAV_LAYOUTS,
+  storeVideoLayout, posterWidth, bannerWidth, JAV_LAYOUTS,
 } from '../../src/appearance/layout';
 import { normalizeAppSettings, SETTINGS_KEY } from '../../src/appearance/settings';
 import { applyTheme, THEME_OPTIONS } from '../../src/appearance/theme';
@@ -25,6 +25,20 @@ describe('卡片版式', () => {
     expect(gridLayout(context, settings).posterWidth).toBe(220);
     expect(normalizeAppSettings({ posterWidth: 900 }).settings.posterWidth).toBe(180);
   });
+  it('横幅宽度独立保存并参与版式更新，超限值按边界处理', () => {
+    expect([bannerWidth({}), bannerWidth({ bannerWidth: 1 }), bannerWidth({ bannerWidth: 900 })])
+      .toEqual([320, 220, 480]);
+    const settings = settingsWith({ posterWidth: 180, bannerWidth: 360 });
+    const context = { active: true, home: true, portrait: false };
+    const first = gridLayout(context, settings);
+    settings.bannerWidth = 480;
+    expect(gridLayout(context, settings)).not.toBe(first);
+    expect(gridLayout(context, settings)).toMatchObject({ posterWidth: 180, bannerWidth: 480 });
+    expect(normalizeAppSettings({ bannerWidth: 900 }).settings.bannerWidth).toBe(320);
+    const store = createSettingsStore(SETTINGS_KEY, settings);
+    store.save();
+    expect(JSON.parse(localStorage.getItem(SETTINGS_KEY)!)).toMatchObject({ posterWidth: 180, bannerWidth: 480 });
+  });
   it('首页读首页那一份，别处读 JAV 那一份；旧值并进两档', () => {
     const settings = settingsWith({ homeLayout: 'big', javLayout: 'sleeve' });
     expect([cardLayoutFor(true, settings), cardLayoutFor(false, settings)]).toEqual(['big', 'small']);
@@ -38,7 +52,7 @@ describe('卡片版式', () => {
     settings.homeLayout = 'big';
     const changed = gridLayout(context, settings);
     expect(changed).not.toBe(first);
-    expect(changed).toEqual({ active: true, size: 'big', portrait: false, javImage: 'cover', posterWidth: 180 });
+    expect(changed).toEqual({ active: true, size: 'big', portrait: false, javImage: 'cover', posterWidth: 180, bannerWidth: 320 });
   });
 
   it('骨架与真卡同一个比例：竖屏 9:16，分大小图的路径上大图取正封比例，其余 16:9', () => {

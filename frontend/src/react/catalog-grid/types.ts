@@ -56,7 +56,7 @@ export interface MediaPageOptions { limit: number; sort?: string; dir?: string }
 
 /** 这一屏卡片的版式。`active` 是番号版式开关生效（JAV 模式或首页版式），`size` 是大图／小图，
  *  `portrait` 是这一屏整列都是竖屏（显式筛了竖屏），`javImage` 是「JAV 默认封面」设置。 */
-export interface MediaCardLayout { active: boolean; size: 'big' | 'small'; portrait: boolean; javImage: string; posterWidth?: number }
+export interface MediaCardLayout { active: boolean; size: 'big' | 'small'; portrait: boolean; javImage: string; posterWidth?: number; bannerWidth?: number }
 
 /** 卡片上仍由遗留层拼的几段 HTML。封面、头像与悬停预览直接取 `@peach/card-art`。 */
 export interface MediaCardHelpers {

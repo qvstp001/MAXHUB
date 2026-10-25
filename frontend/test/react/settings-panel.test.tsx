@@ -171,6 +171,27 @@ function watchReports() {
 }
 
 describe('设置面板与壳的接缝', () => {
+  it('横幅尺寸独立保存并拒绝超过范围的数值', async () => {
+    const current = await setup();
+    const panel = await open(current, '浏览与播放');
+    const input = panel.querySelector<HTMLInputElement>('input[aria-label="横幅尺寸"]')!;
+    const poster = current.value.posterWidth;
+    current.save.mockClear();
+    current.changed.mockClear();
+    await act(async () => {
+      input.value = '400';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect([current.value.bannerWidth, current.value.posterWidth, current.save.mock.calls.length, effects(current.changed)])
+      .toEqual([400, poster, 1, ['bannerWidth']]);
+    await act(async () => {
+      input.value = '481';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(current.value.bannerWidth).toBe(400);
+    expect(current.save).toHaveBeenCalledTimes(1);
+  });
   it('五个分区按使用场景组织，Peach 配置入口遵守设备权限', async () => {
     const current = await setup();
     const openConfiguration = vi.fn();

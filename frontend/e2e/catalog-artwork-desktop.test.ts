@@ -35,16 +35,25 @@ it('桌面首页横幅、海报尺寸和排序可以切换并保存', async () =
     await picture.locator('img[data-backdrop-image]').waitFor();
     const ratio = await picture.evaluate(node => node.clientWidth / node.clientHeight);
     assert.ok(Math.abs(ratio - 16 / 9) < .02, String(ratio));
+    const bannerSlider = page.getByRole('slider', { name: '横幅尺寸', exact: true });
+    await bannerSlider.focus();
+    for (const [key, expected] of [['End', 480], ['Home', 220], ['ArrowRight', 230]] as const) {
+      await bannerSlider.press(key);
+      await page.waitForFunction(value => document.querySelector('[data-card-size-control] [role=slider]')?.getAttribute('aria-valuenow') === String(value), expected);
+      const box = await picture.boundingBox();
+      assert.ok(box && Math.abs(box.width - expected) < 1, JSON.stringify(box));
+      assert.ok(box && Math.abs(box.width / box.height - 16 / 9) < .02, JSON.stringify(box));
+    }
     await page.locator('[data-glass-segment]', { has: page.getByRole('radio', { name: '海报', exact: true }) }).click();
     await picture.locator('img[data-jav-image]').waitFor();
     const slider = page.getByRole('slider', { name: '海报尺寸', exact: true });
     await slider.focus();
     await slider.press('End');
-    await page.waitForFunction(() => document.querySelector('[data-poster-size-control] [role=slider]')?.getAttribute('aria-valuenow') === '260');
+    await page.waitForFunction(() => document.querySelector('[data-card-size-control] [role=slider]')?.getAttribute('aria-valuenow') === '260');
     const size = await picture.boundingBox();
     assert.ok(size && size.width <= 260.5 && size.width > 250, JSON.stringify(size));
     await slider.press('Home');
-    await page.waitForFunction(() => document.querySelector('[data-poster-size-control] [role=slider]')?.getAttribute('aria-valuenow') === '140');
+    await page.waitForFunction(() => document.querySelector('[data-card-size-control] [role=slider]')?.getAttribute('aria-valuenow') === '140');
     await page.reload({ waitUntil: 'load' });
     await page.getByRole('slider', { name: '海报尺寸', exact: true }).waitFor();
     assert.equal(await page.getByRole('slider', { name: '海报尺寸', exact: true }).getAttribute('aria-valuenow'), '140');
@@ -59,6 +68,13 @@ it('桌面首页横幅、海报尺寸和排序可以切换并保存', async () =
     }
     await page.locator('[data-glass-segment]', { has: page.getByRole('radio', { name: '横幅', exact: true }) }).click();
     await picture.locator('img[data-backdrop-image]').waitFor();
+    assert.equal(await bannerSlider.getAttribute('aria-valuenow'), '230');
+    await page.reload({ waitUntil: 'load' });
+    await bannerSlider.waitFor();
+    assert.equal(await bannerSlider.getAttribute('aria-valuenow'), '230');
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('peach.settings.v1')!));
+    assert.equal(saved.bannerWidth, 230);
+    assert.equal(saved.posterWidth, 140);
     await settle(page);
     const geometry = await layout(page);
     assert.ok(geometry.scrollWidth <= geometry.viewportWidth + 1, JSON.stringify(geometry));
