@@ -202,6 +202,7 @@ export interface CoverItem {
   cover_version?: string;
   has_thumb?: boolean;
   has_local_poster?: boolean;
+  has_backdrop?: boolean;
   cover_frame?: { cx?: number | null; cy?: number | null; layout?: string } | null;
   poster_box?: { x0?: number; y0?: number; x1?: number; y1?: number; px?: number[]; method?: string } | null;
   [field: string]: unknown;
@@ -290,6 +291,7 @@ export function queueThumbHtml(item: CoverItem, javImage: unknown): string {
    官方封套或预览图；其它媒体退到本地预览格。返回空串表示这条没有可用的本地图，
    播放器照旧从黑场开始。 */
 export function detailPosterUrl(item: CoverItem, javImage: unknown): string {
+  if (item.has_backdrop) return `/backdrop?id=${item.id}`;
   const thumb = item.has_thumb || item.has_local_poster ? `/poster?id=${item.id}&c=4` : '';
   if (!item.is_jav) return item.has_cover && item.cover_key ? coverUrl(item) : thumb;
   return javImageKind(item, javImage) === 'cover'

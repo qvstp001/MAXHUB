@@ -31,6 +31,7 @@ export class SubtitleControls {
   private results: SearchResult[] = [];
   private more = false;
   private searched = false;
+  private source: 'subtitlecat' | 'xunlei' = 'subtitlecat';
 
   constructor(private player: VjsPlayer, private video: HTMLVideoElement, private panels: Panels) {
     this.styles = mountCaptionStyle(player.el(), video, this.cleanup.signal);
@@ -172,12 +173,32 @@ export class SubtitleControls {
     this.request?.abort();
     this.page = 'search';
     const item = this.player.peachItem;
-    const query = String(item?.code || item?.title || String(item?.name || '').replace(/\.(mp4|mkv|avi|mov|webm|m4v|ts|wmv)$/i, '')).trim().slice(0, 200);
+    const query = String(item?.code || item?.title || String(item?.name || '').replace(/\.(mp4|mkv|avi|mov|webm|m4v|ts|wmv|strm)$/i, '')).trim().slice(0, 200);
     if (query !== this.query) { this.query = query; this.offset = 0; this.results = []; this.searched = false }
-    const panel = this.panel(this.header('搜索中文字幕') + '<div class="vjs-peach-subtitle-search"><p class="vjs-peach-subtitle-status" data-subtitle-status role="status" hidden></p><div data-subtitle-results></div><a href="https://www.subtitlecat.com" target="_blank" rel="noopener noreferrer">中文字幕由 SubtitleCat 提供，可能包含机翻</a></div>', () => { this.request?.abort(); this.show(-1) });
+    const attribution = this.source === 'subtitlecat'
+      ? '<a href="https://www.subtitlecat.com" target="_blank" rel="noopener noreferrer">中文字幕由 SubtitleCat 提供，可能包含机翻</a>'
+      : '<a href="https://www.xunlei.com" target="_blank" rel="noopener noreferrer">字幕由迅雷字幕库提供</a>';
+    const panel = this.panel(this.header(this.source === 'subtitlecat' ? '搜索中文字幕' : '搜索字幕') +
+      `<button type="button" class="vjs-peach-caption-setting" data-subtitle-source><span>字幕来源</span><b>${this.source === 'subtitlecat' ? 'SubtitleCat' : '迅雷字幕库'}</b>${icon('player-menu-next')}</button>` +
+      `<div class="vjs-peach-subtitle-search"><p class="vjs-peach-subtitle-status" data-subtitle-status role="status" hidden></p><div data-subtitle-results></div>${attribution}</div>`, () => { this.request?.abort(); this.show(-1) });
+    panel.querySelector<HTMLButtonElement>('[data-subtitle-source]')!.onclick = () => this.sourceOptions();
     if (query.length < 3) { this.status('当前作品没有可用于搜索的番号或片名'); return }
     if (this.searched) this.searchResults(panel);
     else void this.runSearch(panel, 0);
+  }
+
+  private sourceOptions() {
+    this.request?.abort(); this.page = 'sources';
+    const sources = [['subtitlecat', 'SubtitleCat'], ['xunlei', '迅雷字幕库']] as const;
+    const panel = this.panel(this.header('字幕来源') + `<div class="vjs-peach-panel-menu">${sources.map(([key, label]) =>
+      `<button type="button" class="vjs-peach-menu-option" role="menuitemradio" aria-checked="${key === this.source}" data-subtitle-provider="${key}"><span class="vjs-peach-option-check">${key === this.source ? icon('check') : ''}</span><span class="vjs-peach-option-label">${label}</span></button>`).join('')}</div>`, () => this.searchPanel());
+    panel.querySelectorAll<HTMLButtonElement>('[data-subtitle-provider]').forEach(button => {
+      button.onclick = () => {
+        const source = button.dataset.subtitleProvider as typeof this.source;
+        if (source !== this.source) { this.source = source; this.offset = 0; this.results = []; this.more = false; this.searched = false }
+        this.searchPanel();
+      };
+    });
   }
 
   private searchResults(panel: HTMLElement) {
@@ -186,7 +207,8 @@ export class SubtitleControls {
       (this.more ? '<button type="button" class="vjs-peach-caption-action" data-subtitle-more>更多字幕</button>' : '');
     list.querySelectorAll<HTMLButtonElement>('[data-subtitle-result]').forEach(button => { button.onclick = () => { void this.showFiles(this.results[Number(button.dataset.subtitleResult)]!) } });
     list.querySelector<HTMLButtonElement>('[data-subtitle-more]')?.addEventListener('click', () => { void this.runSearch(panel, this.offset + 6) });
-    this.status(this.results.length ? `找到 ${this.results.length} 条中文字幕` : this.more ? '这批结果没有中文，可查看更多字幕' : '没有找到当前作品的中文字幕');
+    const kind = this.source === 'subtitlecat' ? '中文字幕' : '字幕';
+    this.status(this.results.length ? `找到 ${this.results.length} 条${kind}` : this.more ? '这批结果没有中文，可查看更多字幕' : `没有找到当前作品的${kind}`);
   }
 
   private async runSearch(panel: HTMLElement, offset = this.offset) {
@@ -196,7 +218,7 @@ export class SubtitleControls {
     const list = panel.querySelector<HTMLElement>('[data-subtitle-results]')!;
     panel.setAttribute('aria-busy', 'true'); if (trigger) setActionBusy(trigger); list.inert = true; this.status('正在搜索字幕…', false, true);
     try {
-      const payload = await api(`/api/subtitles/search?q=${encodeURIComponent(this.query)}&offset=${offset}`, { signal }) as { results: SearchResult[]; more: boolean };
+      const payload = await api(`/api/subtitles/search?q=${encodeURIComponent(this.query)}&offset=${offset}&source=${this.source}`, { signal }) as { results: SearchResult[]; more: boolean };
       if (signal.aborted || generation !== this.generation) return;
       this.offset = offset; this.results.push(...payload.results); this.more = payload.more; this.searched = true;
       this.searchResults(panel);
@@ -212,27 +234,28 @@ export class SubtitleControls {
   }
 
   private async showFiles(result: SearchResult) {
+    const source = this.source;
     this.page = 'files';
     const panel = this.panel(this.header('选择字幕文件') + '<div class="vjs-peach-panel-menu" data-subtitle-files></div><p class="vjs-peach-subtitle-status" data-subtitle-status role="status"></p>', () => { void this.searchPanel() });
     const signal = this.busy(), generation = this.generation; this.status('正在读取字幕文件…', false, true);
     try {
-      const payload = await api(`/api/subtitles/subtitlecat/${result.id}`, { signal }) as { files: SubtitleFile[] };
+      const payload = await api(`/api/subtitles/${source}/${result.id}`, { signal }) as { files: SubtitleFile[] };
       if (signal.aborted || generation !== this.generation) return;
       const files = payload.files.filter(file => file.playable);
       panel.querySelector('[data-subtitle-files]')!.innerHTML = files.map(file => `<button type="button" class="vjs-peach-subtitle-result" data-subtitle-online="${file.index}"><span>${esc(file.name)}</span><small>${esc(file.language)}</small></button>`).join('');
       this.status(files.length ? '选择要加载的字幕' : '这条结果没有可加载的文本字幕');
       panel.querySelectorAll<HTMLButtonElement>('[data-subtitle-online]').forEach(button => {
-        button.onclick = () => { const file = files.find(row => row.index === Number(button.dataset.subtitleOnline))!; void this.loadOnline(result.id, file) };
+        button.onclick = () => { const file = files.find(row => row.index === Number(button.dataset.subtitleOnline))!; void this.loadOnline(source, result.id, file) };
       });
     } catch (error) { if (!signal.aborted && generation === this.generation) this.status(error instanceof Error ? error.message : '字幕文件未取得', true) }
   }
 
-  private async loadOnline(id: string, file: SubtitleFile) {
+  private async loadOnline(source: string, id: string, file: SubtitleFile) {
     const signal = this.busy(); this.status('正在加载字幕…', false, true);
     try {
-      const key = `subtitlecat:${id}:${file.index}`, existing = this.imported.get(key);
+      const key = `${source}:${id}:${file.index}`, existing = this.imported.get(key);
       if (existing) this.select(existing.node.track);
-      else await this.attach(await this.text(await fetch(`/api/subtitles/subtitlecat/${id}/${file.index}`, { signal })), file.name, key, signal);
+      else await this.attach(await this.text(await fetch(`/api/subtitles/${source}/${id}/${file.index}`, { signal })), file.name, key, signal);
       if (!signal.aborted) { this.show(0); this.status(`已加载 ${file.name}`) }
     } catch (error) { if (!signal.aborted) this.status(error instanceof Error ? error.message : '字幕加载失败', true) }
   }

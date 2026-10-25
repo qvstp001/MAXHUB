@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from . import subtitle_search, subtitles
+from . import subtitle_search, subtitle_xunlei, subtitles
 from .routes_auth import require_auth
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -33,9 +33,11 @@ async def convert_subtitle(request: Request, name: str = ""):
 
 
 @router.get("/api/subtitles/search")
-def search_subtitles(q: str = "", offset: int = 0):
+def search_subtitles(q: str = "", offset: int = 0, source: str = 'subtitlecat'):
     try:
-        return subtitle_search.search(q, offset)
+        if source not in {'subtitlecat', 'xunlei'}:
+            raise subtitle_search.SubtitleSearchError('字幕来源不受支持')
+        return (subtitle_xunlei if source == 'xunlei' else subtitle_search).search(q, offset)
     except subtitle_search.SubtitleSearchError as error:
         return _error(error)
 
@@ -52,5 +54,21 @@ def subtitle_files(subtitle_id: str):
 def online_subtitle(subtitle_id: str, index: int):
     try:
         return _track(subtitle_search.load(subtitle_id, index))
+    except (subtitle_search.SubtitleSearchError, subtitles.SubtitleUndecodable) as error:
+        return _error(error)
+
+
+@router.get('/api/subtitles/xunlei/{subtitle_id}')
+def xunlei_files(subtitle_id: str):
+    try:
+        return subtitle_xunlei.files(subtitle_id)
+    except subtitle_search.SubtitleSearchError as error:
+        return _error(error)
+
+
+@router.get('/api/subtitles/xunlei/{subtitle_id}/{index}')
+def xunlei_subtitle(subtitle_id: str, index: int):
+    try:
+        return _track(subtitle_xunlei.load(subtitle_id, index))
     except (subtitle_search.SubtitleSearchError, subtitles.SubtitleUndecodable) as error:
         return _error(error)

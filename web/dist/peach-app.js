@@ -12331,6 +12331,7 @@ function Oa(e, t) {
 	return Da(e, "small", !1, t).html || "<span class=\"nopic\">无预览</span>";
 }
 function ka(e, t) {
+	if (e.has_backdrop) return `/backdrop?id=${e.id}`;
 	let n = e.has_thumb || e.has_local_poster ? `/poster?id=${e.id}&c=4` : "";
 	return e.is_jav ? aa(e, t) === "cover" ? pa(e) : n : e.has_cover && e.cover_key ? pa(e) : n;
 }
@@ -31013,6 +31014,7 @@ var fde = () => "<svg viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M11,1
 	results = [];
 	more = !1;
 	searched = !1;
+	source = "subtitlecat";
 	constructor(e, t, n) {
 		this.player = e, this.video = t, this.panels = n, this.styles = dde(e.el(), t, this.cleanup.signal), this.cc = e.el().querySelector(".vjs-subtitles-control > button"), this.cc.innerHTML = fde(), this.cc.onclick = () => {
 			let e = this.tracks().find((e) => e.mode === "showing");
@@ -31151,12 +31153,20 @@ var fde = () => "<svg viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M11,1
 	}
 	searchPanel() {
 		this.request?.abort(), this.page = "search";
-		let e = this.player.peachItem, t = String(e?.code || e?.title || String(e?.name || "").replace(/\.(mp4|mkv|avi|mov|webm|m4v|ts|wmv)$/i, "")).trim().slice(0, 200);
+		let e = this.player.peachItem, t = String(e?.code || e?.title || String(e?.name || "").replace(/\.(mp4|mkv|avi|mov|webm|m4v|ts|wmv|strm)$/i, "")).trim().slice(0, 200);
 		t !== this.query && (this.query = t, this.offset = 0, this.results = [], this.searched = !1);
-		let n = this.panel(this.header("搜索中文字幕") + "<div class=\"vjs-peach-subtitle-search\"><p class=\"vjs-peach-subtitle-status\" data-subtitle-status role=\"status\" hidden></p><div data-subtitle-results></div><a href=\"https://www.subtitlecat.com\" target=\"_blank\" rel=\"noopener noreferrer\">中文字幕由 SubtitleCat 提供，可能包含机翻</a></div>", () => {
+		let n = this.source === "subtitlecat" ? "<a href=\"https://www.subtitlecat.com\" target=\"_blank\" rel=\"noopener noreferrer\">中文字幕由 SubtitleCat 提供，可能包含机翻</a>" : "<a href=\"https://www.xunlei.com\" target=\"_blank\" rel=\"noopener noreferrer\">字幕由迅雷字幕库提供</a>", r = this.panel(this.header(this.source === "subtitlecat" ? "搜索中文字幕" : "搜索字幕") + `<button type="button" class="vjs-peach-caption-setting" data-subtitle-source><span>字幕来源</span><b>${this.source === "subtitlecat" ? "SubtitleCat" : "迅雷字幕库"}</b>${z("player-menu-next")}</button><div class="vjs-peach-subtitle-search"><p class="vjs-peach-subtitle-status" data-subtitle-status role="status" hidden></p><div data-subtitle-results></div>${n}</div>`, () => {
 			this.request?.abort(), this.show(-1);
 		});
-		t.length < 3 ? this.status("当前作品没有可用于搜索的番号或片名") : this.searched ? this.searchResults(n) : this.runSearch(n, 0);
+		r.querySelector("[data-subtitle-source]").onclick = () => this.sourceOptions(), t.length < 3 ? this.status("当前作品没有可用于搜索的番号或片名") : this.searched ? this.searchResults(r) : this.runSearch(r, 0);
+	}
+	sourceOptions() {
+		this.request?.abort(), this.page = "sources", this.panel(this.header("字幕来源") + `<div class="vjs-peach-panel-menu">${[["subtitlecat", "SubtitleCat"], ["xunlei", "迅雷字幕库"]].map(([e, t]) => `<button type="button" class="vjs-peach-menu-option" role="menuitemradio" aria-checked="${e === this.source}" data-subtitle-provider="${e}"><span class="vjs-peach-option-check">${e === this.source ? z("check") : ""}</span><span class="vjs-peach-option-label">${t}</span></button>`).join("")}</div>`, () => this.searchPanel()).querySelectorAll("[data-subtitle-provider]").forEach((e) => {
+			e.onclick = () => {
+				let t = e.dataset.subtitleProvider;
+				t !== this.source && (this.source = t, this.offset = 0, this.results = [], this.more = !1, this.searched = !1), this.searchPanel();
+			};
+		});
 	}
 	searchResults(e) {
 		let t = e.querySelector("[data-subtitle-results]");
@@ -31166,14 +31176,16 @@ var fde = () => "<svg viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M11,1
 			};
 		}), t.querySelector("[data-subtitle-more]")?.addEventListener("click", () => {
 			this.runSearch(e, this.offset + 6);
-		}), this.status(this.results.length ? `找到 ${this.results.length} 条中文字幕` : this.more ? "这批结果没有中文，可查看更多字幕" : "没有找到当前作品的中文字幕");
+		});
+		let n = this.source === "subtitlecat" ? "中文字幕" : "字幕";
+		this.status(this.results.length ? `找到 ${this.results.length} 条${n}` : this.more ? "这批结果没有中文，可查看更多字幕" : `没有找到当前作品的${n}`);
 	}
 	async runSearch(e, t = this.offset) {
 		if (e.getAttribute("aria-busy") === "true") return;
 		let n = this.busy(), r = this.generation, i = e.querySelector("[data-subtitle-more],[data-subtitle-retry]"), a = e.querySelector("[data-subtitle-results]");
 		e.setAttribute("aria-busy", "true"), i && Os(i), a.inert = !0, this.status("正在搜索字幕…", !1, !0);
 		try {
-			let i = await Lt(`/api/subtitles/search?q=${encodeURIComponent(this.query)}&offset=${t}`, { signal: n });
+			let i = await Lt(`/api/subtitles/search?q=${encodeURIComponent(this.query)}&offset=${t}&source=${this.source}`, { signal: n });
 			if (n.aborted || r !== this.generation) return;
 			this.offset = t, this.results.push(...i.results), this.more = i.more, this.searched = !0, this.searchResults(e);
 		} catch (i) {
@@ -31185,33 +31197,34 @@ var fde = () => "<svg viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M11,1
 		}
 	}
 	async showFiles(e) {
+		let t = this.source;
 		this.page = "files";
-		let t = this.panel(this.header("选择字幕文件") + "<div class=\"vjs-peach-panel-menu\" data-subtitle-files></div><p class=\"vjs-peach-subtitle-status\" data-subtitle-status role=\"status\"></p>", () => {
+		let n = this.panel(this.header("选择字幕文件") + "<div class=\"vjs-peach-panel-menu\" data-subtitle-files></div><p class=\"vjs-peach-subtitle-status\" data-subtitle-status role=\"status\"></p>", () => {
 			this.searchPanel();
-		}), n = this.busy(), r = this.generation;
+		}), r = this.busy(), i = this.generation;
 		this.status("正在读取字幕文件…", !1, !0);
 		try {
-			let i = await Lt(`/api/subtitles/subtitlecat/${e.id}`, { signal: n });
-			if (n.aborted || r !== this.generation) return;
-			let a = i.files.filter((e) => e.playable);
-			t.querySelector("[data-subtitle-files]").innerHTML = a.map((e) => `<button type="button" class="vjs-peach-subtitle-result" data-subtitle-online="${e.index}"><span>${B(e.name)}</span><small>${B(e.language)}</small></button>`).join(""), this.status(a.length ? "选择要加载的字幕" : "这条结果没有可加载的文本字幕"), t.querySelectorAll("[data-subtitle-online]").forEach((t) => {
-				t.onclick = () => {
-					let n = a.find((e) => e.index === Number(t.dataset.subtitleOnline));
-					this.loadOnline(e.id, n);
+			let a = await Lt(`/api/subtitles/${t}/${e.id}`, { signal: r });
+			if (r.aborted || i !== this.generation) return;
+			let o = a.files.filter((e) => e.playable);
+			n.querySelector("[data-subtitle-files]").innerHTML = o.map((e) => `<button type="button" class="vjs-peach-subtitle-result" data-subtitle-online="${e.index}"><span>${B(e.name)}</span><small>${B(e.language)}</small></button>`).join(""), this.status(o.length ? "选择要加载的字幕" : "这条结果没有可加载的文本字幕"), n.querySelectorAll("[data-subtitle-online]").forEach((n) => {
+				n.onclick = () => {
+					let r = o.find((e) => e.index === Number(n.dataset.subtitleOnline));
+					this.loadOnline(t, e.id, r);
 				};
 			});
 		} catch (e) {
-			!n.aborted && r === this.generation && this.status(e instanceof Error ? e.message : "字幕文件未取得", !0);
+			!r.aborted && i === this.generation && this.status(e instanceof Error ? e.message : "字幕文件未取得", !0);
 		}
 	}
-	async loadOnline(e, t) {
-		let n = this.busy();
+	async loadOnline(e, t, n) {
+		let r = this.busy();
 		this.status("正在加载字幕…", !1, !0);
 		try {
-			let r = `subtitlecat:${e}:${t.index}`, i = this.imported.get(r);
-			i ? this.select(i.node.track) : await this.attach(await this.text(await fetch(`/api/subtitles/subtitlecat/${e}/${t.index}`, { signal: n })), t.name, r, n), n.aborted || (this.show(0), this.status(`已加载 ${t.name}`));
+			let i = `${e}:${t}:${n.index}`, a = this.imported.get(i);
+			a ? this.select(a.node.track) : await this.attach(await this.text(await fetch(`/api/subtitles/${e}/${t}/${n.index}`, { signal: r })), n.name, i, r), r.aborted || (this.show(0), this.status(`已加载 ${n.name}`));
 		} catch (e) {
-			n.aborted || this.status(e instanceof Error ? e.message : "字幕加载失败", !0);
+			r.aborted || this.status(e instanceof Error ? e.message : "字幕加载失败", !0);
 		}
 	}
 };
@@ -77898,7 +77911,7 @@ function yU({ item: e, image: t, source: n = !1, thumbnail: r = !1 }) {
 		image: String(t - 1),
 		thumbnail: r
 	});
-	let c = t < 0 ? pa(e, !0) : `/${r ? "sample-thumb" : "sample-image"}?code=${encodeURIComponent(e.code || "")}&n=${t}`;
+	let c = t === -3 ? `/backdrop?id=${e.id}` : t < 0 ? pa(e, !0) : `/${r ? "sample-thumb" : "sample-image"}?code=${encodeURIComponent(e.code || "")}&n=${t}`;
 	return r ? i ? /* @__PURE__ */ (0, C.jsx)("span", { children: "预览未取得" }) : /* @__PURE__ */ (0, C.jsx)("img", {
 		src: c,
 		alt: "",
@@ -77916,7 +77929,7 @@ function yU({ item: e, image: t, source: n = !1, thumbnail: r = !1 }) {
 	}) : /* @__PURE__ */ (0, C.jsx)("img", {
 		"data-catalog-picture": "",
 		src: c,
-		alt: t < 0 ? `${e.code} 封面` : `${e.code} 预览 ${t}`,
+		alt: t === -3 ? `${e.code || e.title || e.name} 横幅` : t < 0 ? `${e.code} 封面` : `${e.code} 预览 ${t}`,
 		onError: () => a(!0)
 	}, o);
 }
@@ -78302,21 +78315,24 @@ function tHe({ item: e, gate: t, helpers: n, actions: r, autoplay: i, onEnded: a
 	})) : Array.from({ length: Math.min(30, Math.max(0, f.data?.preview_count || 0)) }, (e, t) => ({
 		index: t + 1,
 		source: !0
-	})), m = e.is_jav && e.code ? [
-		...e.has_cover ? [{
+	})), m = [
+		...e.has_backdrop ? [{
+			index: -3,
+			label: "横幅"
+		}] : [],
+		...e.is_jav && e.code ? [...e.has_cover ? [{
 			index: -1,
 			label: "封面"
-		}] : [],
-		...p.map((e, t) => ({
+		}] : [], ...p.map((e, t) => ({
 			...e,
 			label: `预览 ${t + 1}`
-		})),
+		}))] : [],
 		{
 			index: -2,
 			label: "正片",
 			video: !0
 		}
-	] : [], h = m.length > 1, g = (e) => {
+	], h = m.length > 1, g = (e) => {
 		e !== -2 && c.current?.querySelector("video")?.pause(), u(e);
 	}, _ = (0, S.useRef)(e), v = (0, S.useRef)(a);
 	v.current = a, (0, S.useLayoutEffect)(() => {

@@ -14,6 +14,7 @@ import {
   type DetailItem, type DetailQueue, type ItemDetailActions, type ItemDetailHelpers, type ItemDetailProps, type QueueItem,
 } from '../../src/react/item-detail/item-detail';
 import { ItemDetailPage } from '../../src/react/item-detail/item-detail-page';
+import { detailPosterUrl } from '../../src/card-art';
 import { tagLabel } from '../../src/core/tags';
 import { queryClient } from '../../src/react/query';
 import { click, mount, pending, settle, type } from './render';
@@ -72,6 +73,20 @@ function serve(answer: (url: string, body: Record<string, unknown>) => unknown =
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
 }
+
+it('横幅用于待播画面并可在详情里与正片互相切换', async () => {
+  const movie = item(1, { has_backdrop: true });
+  expect(detailPosterUrl(movie, 'cover')).toBe('/backdrop?id=1');
+  serve(undefined, { '/api/item?': movie });
+  const root = await mount(<QueryClientProvider client={queryClient}><ItemDetailPage {...props()} /></QueryClientProvider>);
+  await settle();
+  await click(root.querySelector<HTMLButtonElement>('[data-jav-preview-toggle]')!);
+  expect(root.querySelector('[data-catalog-picture]')?.getAttribute('src')).toBe('/backdrop?id=1');
+  expect(root.querySelector('[data-follow-image-item="-3"]')?.getAttribute('aria-current')).toBe('true');
+  await click(root.querySelector<HTMLButtonElement>('[data-follow-image-item="-2"]')!);
+  expect(root.querySelector('[data-catalog-picture]')).toBeNull();
+  expect(root.querySelector('[data-follow-image-item="-2"]')?.getAttribute('aria-current')).toBe('true');
+});
 const posts = (fetcher: ReturnType<typeof serve>) => fetcher.mock.calls
   .filter(([, init]) => init?.method === 'POST').map(([url, init]) => [url, JSON.parse(String(init!.body))]);
 

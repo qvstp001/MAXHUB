@@ -176,7 +176,11 @@ Peach 播放器皮肤直接装饰 Video.js 10 的 light DOM：右侧控制组用
 
 字幕面板复用播放器的选项行、描边勾选、设置齿轮和悬停表面；在线入口按当前作品的番号或片名自动检索，结果保留在当前播放会话，失败可重试。详情原生 `dialog` 只处理自身的 `cancel`，文件输入框冒泡的取消事件保留详情与字幕菜单（[浏览器事件说明](https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/cancel_event)）。播放器模块加载期间只显示海报，原生控制条仅用于加载失败后的播放回退。桌面与手机回归覆盖首次加载、文件取消、菜单 Escape、结果加载及字幕外观。
 
-在线中文字幕只采用 [SubtitleCat](https://www.subtitlecat.com)，复用现有 httpx 与 BeautifulSoup 依赖。来源选择参考 [PotPlayer JAV 中文字幕插件](https://github.com/736368217/PotplayerJavChineseSubs_subtitlecat/tree/0b569fdc3bd2cb27fca2140858ad77bf6d7ddcb8)（MIT；仅参考公开协议与语言选择，不复制代码）。番号检索复用 `catalog_rules` 的规范化、查询变体与身份比较，结合 `feeds.scan_code` 读取结果标题；仅保留同一发行身份，再按每页六条读取详情。标题支持紧凑番号、语言和版本后缀；日期分隔符与未经确认的发行前缀保持区分。片名检索保留用户关键词。只列已有 `zh-CN`／`zh-TW` 文件的结果，最多检查前 60 条，翻页由用户触发；不触发生成翻译。下载限固定 HTTPS 主机、字幕路径与 4 MiB，复用现有转码器。2026-10-18 固定 20 个公开番号均取得中文文件；该小样本不代表全站或馆藏覆盖率，也不证明翻译准确。界面说明可能包含机翻，不声称人工翻译。ASSRT 不接入；JavSub.ai 在同批样本中有 8 个中文条目，7 个需购买、1 个标为免费，但下载返回 403，故不作为在线来源。无需凭据，不增加依赖，不写 ledger 或媒体目录。
+在线字幕采用 SubtitleCat 和迅雷字幕库，复用现有 httpx、BeautifulSoup 和字幕转码器，无需凭据、不增加依赖、不写 ledger 或媒体目录。SubtitleCat 参考 [PotPlayer JAV 中文字幕插件](https://github.com/736368217/PotplayerJavChineseSubs_subtitlecat/tree/0b569fdc3bd2cb27fca2140858ad77bf6d7ddcb8)（MIT；只参考公开协议与语言选择）。只列已有 `zh-CN`／`zh-TW` 的文件，界面保留机翻提示，不触发生成翻译。
+
+迅雷接口模型参考 [MeiamSubtitles](https://github.com/91270/MeiamSubtitles/tree/b0427939fad525a19dd738b57fd23c2842490dfd) 的 `Jellyfin.MeiamSub.Thunder/ThunderProvider.cs`（Apache-2.0；持续维护的 Emby／Jellyfin C# 插件，不能直接作为 Python 依赖；只核对协议，不复制代码）。查询使用 `https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=...`，下载仅允许 `subtitle.v.geilijiasu.com` 的固定哈希路径和 HTTPS；不计算 STRM 文件或远程影片哈希。保留来源语言标注，支持 SRT／ASS／SSA／VTT。2026-10-25 使用公开影片 Big Buck Bunny 实测检索、单文件下载和 WebVTT 转换，得到 237 条时间轴；片名结果仍需用户选择匹配版本。候选 `thunder-subtitle-srt==1.4.4` 支持 Python 3.10+，依赖 requests，但 PyPI 未声明许可证和源码地址，CLI 的目录扫描与落盘不属于播放需求，因此未引入；旧 ThunderSubs 已归档并标注接口不可用，未采用。
+
+两来源的番号检索共用 `catalog_rules` 的规范化、查询变体和发行身份比较，按六条分页、最多 60 条；保留片名关键词。下载限制为 4 MiB，重定向逐跳校验固定主机与路径。ASSRT 不接入；JavSub.ai 的下载实证返回 403，未作为在线来源。本地横幅发现复用 `library_nfo.SidecarIndex` 和媒体引擎的授权路径解析，只在详情中按需读取图片与 NFO。
 
 ## 分级诊断
 

@@ -614,6 +614,15 @@ def poster(request: Request, id: int, c: int = 4, args: dict[str, str] = Depends
     return _image_response(request, path, media_type="image/jpeg")
 
 
+@router.api_route("/backdrop", methods=["GET", "HEAD"])
+def backdrop(request: Request, id: int, args: dict[str, str] = Depends(require_auth)):
+    """影片同目录的本地横幅原图。"""
+    path = request.app.state.web_contract.backdrop_path(id)
+    if path is None:
+        return JSONResponse({"error": "no backdrop"}, status_code=404)
+    return _image_response(request, path, media_type='image/jpeg' if path.suffix.lower() == '.tbn' else None)
+
+
 @router.api_route("/timeline", methods=["GET", "HEAD"])
 def timeline(request: Request, id: int, s: int = 0, args: dict[str, str] = Depends(require_auth)):
     """时间轴预览的一张接触印相。只发已经铺好的，这里不现抽。

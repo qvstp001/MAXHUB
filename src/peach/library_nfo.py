@@ -120,7 +120,8 @@ def read_nfo(path: Path):
         actresses=[{'japanese_name': (node.findtext('name') or '').strip()}
                    for node in root.findall('actor')], genres=genres, local_tags=genres,
         nfo_kind=root.tag, source_generator=text('generator'),
-        local_art=text('art/poster', 'thumb[@aspect="poster"]', 'thumb'))
+        local_art=text('art/poster', 'thumb[@aspect="poster"]', 'thumb'),
+        local_backdrop=text('fanart/thumb', 'art/fanart', 'thumb[@aspect="fanart"]', 'art/landscape', 'art/banner'))
     return payload, raw
 
 

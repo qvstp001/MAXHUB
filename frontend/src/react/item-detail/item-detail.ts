@@ -59,6 +59,7 @@ export interface DetailItem extends Omit<CardFields, 'tags'> {
   tags?: DetailTag[];
   entity_refs?: Partial<Record<'performer' | 'studio' | 'creator' | 'series', DetailEntityRef[]>>;
   sample_images?: { n: number }[];
+  has_backdrop?: boolean;
 }
 
 /** 队列里的一条：卡片那一份，外加版次与卷标。 */

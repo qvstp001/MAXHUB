@@ -4,7 +4,7 @@
 
 <h1 align="center">Peach</h1>
 
-> 本仓库的 `codex/peach-strm` 分支提供 Peach STRM 定制版，包含 302 直连、PotPlayer、Android mpv 和独立 NAS Docker 部署模板。开始使用请看 [STRM Docker 部署](docs/STRM_DOCKER.md)。原 QMaxHub 保留在 `main` 分支。
+> 本仓库的 `codex/peach-strm` 分支提供 Peach STRM 定制版，包含 302 直连、PotPlayer、Android mpv、详情横幅、SubtitleCat 与迅雷字幕库，以及独立 NAS Docker 部署模板。开始使用请看 [STRM Docker 部署](docs/STRM_DOCKER.md)。原 QMaxHub 保留在 `main` 分支。
 
 <p align="center">给自己用的私人影片馆藏：本地硬盘、网盘和关注的创作者，放在一个地方看。</p>
 

@@ -26,6 +26,50 @@ describe('播放器字幕', () => {
   before(async () => { browser = await launch() });
   after(async () => { await browser?.close() });
   for (const viewport of VIEWPORTS) {
+    it(`${viewport.name}：迅雷与 SubtitleCat 可切换，同名编号分别加载`, { timeout: 60_000 }, async () => {
+      const searches: string[] = [], downloads: string[] = [];
+      const opened = await visit(browser, `/assets/${requiredEnv('PEACH_E2E_ITEM')}`, viewport, async page => {
+        await page.route('**/api/subtitles/search?**', route => {
+          const source = new URL(route.request().url()).searchParams.get('source')!;
+          searches.push(source);
+          return route.fulfill({ json: { results: [{ id: 'same', title: `${source}.srt`, language: '简体', format: 'SRT' }], more: false } });
+        });
+        await page.route(/\/api\/subtitles\/(subtitlecat|xunlei)\/same$/, route => {
+          const source = new URL(route.request().url()).pathname.split('/')[3]!;
+          return route.fulfill({ json: { files: [{ index: 0, name: `${source}.srt`, language: '简体', playable: true }] } });
+        });
+        await page.route(/\/api\/subtitles\/(subtitlecat|xunlei)\/same\/0$/, route => {
+          downloads.push(new URL(route.request().url()).pathname);
+          return route.fulfill({ contentType: 'text/vtt', body: 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n来源字幕\n' });
+        });
+      });
+      try {
+        const { page, problems } = opened;
+        await page.locator('#stage .vjs-peach-bezel').waitFor({ state: 'attached' });
+        await menu(page);
+        for (const source of ['subtitlecat', 'xunlei']) {
+          await page.locator('[data-subtitle-search]').click();
+          if (source === 'xunlei') {
+            await page.locator('[data-subtitle-source]').click();
+            await page.locator('[data-subtitle-provider="xunlei"]').click();
+            await page.locator('[data-subtitle-source]').filter({ hasText: '迅雷字幕库' }).waitFor();
+          }
+          await page.locator('[data-subtitle-result]').filter({ hasText: `${source}.srt` }).click();
+          await page.locator('[data-subtitle-online]').click();
+          await page.getByRole('menuitemradio', { name: `${source}.srt`, exact: true }).waitFor();
+        }
+        assert.deepEqual(searches, ['subtitlecat', 'xunlei']);
+        assert.deepEqual(downloads, ['/api/subtitles/subtitlecat/same/0', '/api/subtitles/xunlei/same/0']);
+        assert.equal(await page.locator('#stage video.vjs-tech > track').count(), 2);
+        await page.locator('[data-subtitle-search]').click();
+        await page.locator('[data-subtitle-source]').click();
+        await page.locator('[data-subtitle-provider="subtitlecat"]').click();
+        await page.locator('[data-subtitle-result]').filter({ hasText: 'subtitlecat.srt' }).waitFor();
+        assert.deepEqual(searches, ['subtitlecat', 'xunlei', 'subtitlecat']);
+        assert.deepEqual(problems, []);
+      } finally { await opened.close() }
+    });
+
     it(`${viewport.name}：面板切换中显示搜索动画，空结果提示保持可见`, { timeout: 60_000 }, async () => {
       let release!: () => void;
       const response = new Promise<void>(resolve => { release = resolve });

@@ -10,7 +10,7 @@
 | `routes_configuration` | 本机配置与账号设置 |
 | `routes_jav_browser` | JAV 用户脚本的专用权限、添加与状态查询 |
 | `routes_media` | 播放、分片、缩图、封面、头像、外链圆标 |
-| `routes_subtitles` | 字幕转换、SubtitleCat 中文字幕搜索与加载 |
+| `routes_subtitles` | 字幕转换、SubtitleCat 与迅雷字幕库搜索及加载 |
 | `routes_api` | JSON 契约出口，含两条 `/api/{route:path}` catch-all |
 
 `include_router` 的顺序是契约的一部分，不是排版：FastAPI 按注册顺序匹配，
@@ -254,6 +254,8 @@ def create_app(
         settings.snapshot_root,
     )
     media_engine = MediaEngine(repository, filesystem)
+    from . import local_artwork
+    contract.backdrop_path = lambda asset_id: local_artwork.for_asset(media_engine, asset_id)
     preview_service = PreviewService(
         repository, resolver, settings.snapshot_root, settings.poster_root,
         settings.avatar_root, settings.logo_root,

@@ -984,6 +984,7 @@ def q_item(contract: WebContract, aid):
     d["cost"] = cost_for(d['location'], d.get('path'))
     d["has_thumb"] = contract.has_snapshot(d["snapshot_path"])
     d['has_local_poster'] = (contract.poster_root / f"{d['id']}_4.jpg").is_file()
+    d['has_backdrop'] = contract.backdrop_path(d['id']) is not None
     attach_artwork_fields(contract, d)
     # 身份格的厂牌位和顶栏小圆片同一条判据：没装标识就不输出 `<img>`。规范厂牌走
     # `entity_refs`，非规范的那条只有扁平 `studio` 字段，两边都要有标志，否则

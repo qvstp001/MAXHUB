@@ -44,6 +44,17 @@ docker compose --env-file .env.strm -f deploy/compose.strm.yaml exec peach peach
 
 仅在可信来源的 HTTPS CDN 域名解析为 Fake-IP 时，设置 `PEACH_STRM_FAKE_IP_ORIGINS` 为该来源的协议、主机与端口。跨来源 HTTPS 证书验证仍开启，私网、回环、链路本地目标与混合私网解析仍受限制。详细协议与约束见[外部播放器](EXTERNAL_PLAYERS.md)。
 
+## 横幅与字幕
+
+影片详情优先使用同目录横幅作为待播画面，点击「查看图片」可在横幅、封面和正片之间切换。
+支持 `<影片文件名>-fanart.jpg`、`-landscape`、`-banner`、`-backdrop`，图片可为 JPG、PNG、WebP；
+单影片目录也支持 `fanart.jpg` 等通用文件名。本地 NFO 的 `fanart/thumb`、`art/fanart`、
+`art/landscape`、`art/banner` 引用同样可用。添加图片后刷新页面即可读取。
+
+播放器「设置 → 字幕 → 在线搜索字幕 → 字幕来源」可选择 SubtitleCat 或迅雷字幕库。
+按当前影片番号或片名搜索，选中文件后加载到本次播放；迅雷结果保留来源标注的语言，未标注时显示「语言未标注」。
+支持 SRT、ASS、SSA、VTT 文本字幕，单文件上限 4 MiB。
+
 ## 验证与保留范围
 
 STRM 票据、302/HEAD、Range、代理、Fake-IP 策略及隐私检查的专项测试通过；桌面与手机浏览器验证通过。NAS Linux 容器已验证非 root、只读媒体、NFO 与海报入库、实际影片片头解码、认证和重启持久化。具体设备、目录、馆藏与验收日志属于私有记录，不进入代码仓库。

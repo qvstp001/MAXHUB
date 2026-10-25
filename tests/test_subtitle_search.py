@@ -159,3 +159,22 @@ class SubtitleUploadApiTests(unittest.TestCase):
             self.assertEqual(client.post('/api/subtitles/convert?name=test.srt', content=b'test').status_code, 401)
             self.assertEqual(client.get('/api/subtitles/search?q=ABP-758').status_code, 401)
             self.assertEqual(client.get('/api/subtitles/subtitlecat/invalid').status_code, 401)
+            self.assertEqual(client.get('/api/subtitles/search?q=ABP-758&source=xunlei').status_code, 401)
+            self.assertEqual(client.get('/api/subtitles/xunlei/invalid').status_code, 401)
+            self.assertEqual(client.get('/api/subtitles/xunlei/invalid/0').status_code, 401)
+
+    def test_xunlei_source_search_files_and_load_are_available(self):
+        from peach import subtitle_xunlei
+        with self.client as client:
+            with mock.patch.object(subtitle_xunlei, 'search', return_value={'results': [], 'more': False, 'source': '迅雷字幕库'}) as search:
+                self.assertEqual(client.get('/api/subtitles/search?q=ABP-758&source=xunlei').json()['source'], '迅雷字幕库')
+                search.assert_called_once_with('ABP-758', 0)
+            self.assertEqual(client.get('/api/subtitles/search?q=ABP-758&source=unknown').status_code, 400)
+            self.assertEqual(client.get('/api/subtitles/xunlei/invalid!').status_code, 400)
+            subtitle_id = subtitle_xunlei._id(dict(url=subtitle_xunlei.SITE + '/AA/BB/' + 'A' * 40 + '.srt', name='测试.srt', language='简体'))
+            self.assertEqual(client.get(f'/api/subtitles/xunlei/{subtitle_id}').json()['files'][0]['name'], '测试.srt')
+            with mock.patch.object(subtitle_xunlei, 'load', return_value='WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n测试\n'):
+                response = client.get(f'/api/subtitles/xunlei/{subtitle_id}/0')
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('text/vtt', response.headers['content-type'])
+                self.assertEqual(response.headers['cache-control'], 'no-store')

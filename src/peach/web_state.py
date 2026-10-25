@@ -161,6 +161,8 @@ class WebContract:
         self.database = database or LedgerDatabase(db_path)
         self.db_path = self.database.db_path
         self.snapshot_root = Path(snapshot_root) if snapshot_root is not None else None
+        # 组合根接入只读本地横幅发现；裸契约不访问媒体目录。
+        self.backdrop_path = lambda asset_id: None
         #: 键 → (算出时刻, 输入版本, 结果)，见 `cached()`。
         self.cache: OrderedDict[str, tuple[float, object, object]] = OrderedDict()
         self.cache_lock = threading.Lock()

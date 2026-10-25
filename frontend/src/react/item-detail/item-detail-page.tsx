@@ -147,9 +147,14 @@ function MediaFrame({ item, gate, helpers, actions, autoplay, onEnded }: {
     enabled: !!item.is_jav && !!item.code && !item.sample_images?.length });
   const samples = item.sample_images?.length ? item.sample_images.map(sample => ({ index: sample.n, source: false }))
     : Array.from({ length: Math.min(30, Math.max(0, source.data?.preview_count || 0)) }, (_, index) => ({ index: index + 1, source: true }));
-  const media = item.is_jav && item.code ? [...(item.has_cover ? [{ index: -1, label: '封面' }] : []),
-    ...samples.map((sample, index) => ({ ...sample, label: `预览 ${index + 1}` })),
-    { index: -2, label: '正片', video: true }] : [];
+  const media = [
+    ...(item.has_backdrop ? [{ index: -3, label: '横幅' }] : []),
+    ...(item.is_jav && item.code ? [
+      ...(item.has_cover ? [{ index: -1, label: '封面' }] : []),
+      ...samples.map((sample, index) => ({ ...sample, label: `预览 ${index + 1}` })),
+    ] : []),
+    { index: -2, label: '正片', video: true },
+  ];
   const hasPictures = media.length > 1;
   const selectImage = (index: number) => {
     if (index !== -2) frameRef.current?.querySelector('video')?.pause();
