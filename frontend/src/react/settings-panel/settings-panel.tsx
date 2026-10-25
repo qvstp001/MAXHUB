@@ -420,10 +420,14 @@ function BrowseGroup({ host: current, tab, epoch }: GroupProps) {
             decorate={(field) => decorateDirection(field, ascending)} />
         </div>
       </Row>
-      <Row title="视频卡片大小">
-        <IconSwitch id="javSizeSetting" name="video-size" legend="视频卡片大小" options={current.videoLayouts}
+      <Row title="视频图片模式">
+        <IconSwitch id="javSizeSetting" name="video-size" legend="视频图片模式" options={current.videoLayouts}
           value={current.videoLayout()} attr="data-video-layout" variant="javimageswitch" text epoch={epoch}
           onChoose={(layout) => current.setVideoLayout(layout)} />
+      </Row>
+      <Row title="海报尺寸">
+        <NumberSetting key={epoch} id="posterWidthSetting" label="海报尺寸" value={settings.posterWidth ?? 180}
+          onApply={value => { settings.posterWidth = value; save(); current.changed('posterWidth') }} />
       </Row>
       <PlaybackRows host={current} epoch={epoch} />
     </Group>

@@ -38,7 +38,7 @@ Peach 保留页面粗提取与身份冲突提示，服务端复用 `catalog_rule
 
 ## 长跑任务的结果显示
 
-资料采集与关注检查复用已有字段判据、事务和候选复核。全部本地 NFO 先读取并按影片提交；在线资料按来源返回时提交，候选 CSV 仍按时间合并落盘。关注列表的安全 partial 行与逐项详情分别保存，历史边界和整页游标沿用连接器规则。中断保留已提交结果，停止后不再落库。
+资料采集与关注检查复用已有字段判据、事务和候选复核。全部本地 NFO 先读取并按影片提交；有效 NFO 或账本已有影片资料的资产保持本地处理，不查询外部资料、封面或人物资料。其余资产的在线资料按来源返回时提交，候选 CSV 仍按时间合并落盘。关注列表的安全 partial 行与逐项详情分别保存，历史边界和整页游标沿用连接器规则。中断保留已提交结果，停止后不再落库。
 
 显示层复用 SQLite `ledger_revision` 触发器、候选与图片目录版本，以及 TanStack Query 5.104.3（MIT）查询失效和任务轮询；不新增推送服务或依赖。应用根按结果版本刷新相关读缓存，任务心跳不使资料失效；慢请求期间的新版本排队，保留当前内容。资源同步扫描同时显示已完成来源，清理仍需完整扫描和确认。隔离账本、暂停的来源调用与手动放行的 Promise 验证中间结果可见及中断保留；无真实抓取或真实 ledger 写入。
 
@@ -180,7 +180,7 @@ Peach 播放器皮肤直接装饰 Video.js 10 的 light DOM：右侧控制组用
 
 迅雷接口模型参考 [MeiamSubtitles](https://github.com/91270/MeiamSubtitles/tree/b0427939fad525a19dd738b57fd23c2842490dfd) 的 `Jellyfin.MeiamSub.Thunder/ThunderProvider.cs`（Apache-2.0；持续维护的 Emby／Jellyfin C# 插件，不能直接作为 Python 依赖；只核对协议，不复制代码）。查询使用 `https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=...`，下载仅允许 `subtitle.v.geilijiasu.com` 的固定哈希路径和 HTTPS；不计算 STRM 文件或远程影片哈希。保留来源语言标注，支持 SRT／ASS／SSA／VTT。2026-10-25 使用公开影片 Big Buck Bunny 实测检索、单文件下载和 WebVTT 转换，得到 237 条时间轴；片名结果仍需用户选择匹配版本。候选 `thunder-subtitle-srt==1.4.4` 支持 Python 3.10+，依赖 requests，但 PyPI 未声明许可证和源码地址，CLI 的目录扫描与落盘不属于播放需求，因此未引入；旧 ThunderSubs 已归档并标注接口不可用，未采用。
 
-两来源的番号检索共用 `catalog_rules` 的规范化、查询变体和发行身份比较，按六条分页、最多 60 条；保留片名关键词。下载限制为 4 MiB，重定向逐跳校验固定主机与路径。ASSRT 不接入；JavSub.ai 的下载实证返回 403，未作为在线来源。本地横幅发现复用 `library_nfo.SidecarIndex` 和媒体引擎的授权路径解析，只在详情中按需读取图片与 NFO。
+两来源的番号检索共用 `catalog_rules` 的规范化、查询变体和发行身份比较，按六条分页、最多 60 条；保留片名关键词。下载限制为 4 MiB，重定向逐跳校验固定主机与路径。ASSRT 不接入；JavSub.ai 的下载实证返回 403，未作为在线来源。本地横幅发现复用 `library_nfo.SidecarIndex` 和媒体引擎的授权路径解析，列表按页共用目录索引，图片仍在展示时按需读取。海报尺寸复用 `dialSliderHtml`、`wireDialSlider` 和外观设置存储。番号自然排序使用 Python 标准库 `re` 分段，通过 [SQLite 自定义排序规则](https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.create_collation) 在分页前排序；不引入自然排序依赖。
 
 ## 分级诊断
 
@@ -278,7 +278,7 @@ OneJAV、Free JAV Torrent 只给种子链接。这类条目经索引器同源的
 
 复核用 Checkbox、Button、Badge、Select 与 `/api/review/decision`，默认勾选、沿用馆藏页 Shift 连选；支持跨组通过／拒绝与无歧义的共同来源选择。按候选数量、来源组合或字段分组，每项只出现一次，切组保留选择；成功移出、失败保留，离开页面即停。整页在 `frontend/src/react/review/`，一条队列一个 `queryKey`，判定后改缓存不重取。批准回执在同一事务中读取实际资产版本，缓存只推进仍持有该次写入前版本的候选；逐项与批量提交共用缓存中的并发凭据。身份候选用创作者页、作品详情与 revealSource 核对样本；来源图与缺图占位共用 220px 预览区，样本支持无缩略图作品，回收站不参与。
 
-本地 NFO 配对复用 `library_nfo`、`catalog_rules` 的番号与分卷识别、标准库 ElementTree 及现有资料补空流程。[Kodi NFO 文档](https://kodi.wiki/view/NFO_files/Movies)的同名文件与 `movie.nfo` 约定于 2026-10-17 核对；只参照公开格式，没有复制外部源码。Peach 保留同番号分卷共享、同名文件优先、多份匹配拒绝、内容番号冲突检查和输入安全限制。Kodi 整套媒体中心没有作为依赖引入；标准库随 Python 3.14 运行，无额外体积或许可证。NFO 读取后复用来源缓存与缺失缓存核查在线字段；`requires_review` 跟随候选保留覆盖复核要求，人工决定保存已展示的候选身份，见 ADR-0108。隔离媒体与账本回归覆盖共用 NFO、不同作品混放、错误 NFO 继续在线补全、补空与覆盖分流，以及连续批准的版本回执；真实反馈的 NFO 样本尚未取得，无新增依赖。
+本地 NFO 配对复用 `library_nfo`、`catalog_rules` 的番号与分卷识别、标准库 ElementTree 及现有资料补空流程。[Kodi NFO 文档](https://kodi.wiki/view/NFO_files/Movies)的同名文件与 `movie.nfo` 约定于 2026-10-17 核对；只参照公开格式，没有复制外部源码。Peach 保留同番号分卷共享、同名文件优先、多份匹配拒绝、内容番号冲突检查和输入安全限制。Kodi 整套媒体中心没有作为依赖引入；标准库随 Python 3.14 运行，无额外体积或许可证。有效本地资料跳过在线查询，损坏或身份不匹配的 NFO 允许外部采集；`requires_review` 跟随本地候选保留覆盖复核要求，人工决定保存已展示的候选身份，见 ADR-0108。隔离媒体与账本回归覆盖共用 NFO、不同作品混放、错误 NFO 继续在线补全、本地与在线分流，以及连续批准的版本回执；无新增依赖。
 
 ## 本机设置与卸载
 

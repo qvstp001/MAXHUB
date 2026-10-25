@@ -8,10 +8,10 @@ EXTENSIONS = ('.jpg', '.jpeg', '.png', '.webp', '.tbn')
 KINDS = ('fanart', 'landscape', 'banner', 'backdrop')
 
 
-def backdrop(video: Path) -> Path | None:
+def backdrop(video: Path, files: dict[str, Path] | None = None) -> Path | None:
     """本地 NFO 引用优先，通用文件只用于单影片目录。"""
     root = video.parent.resolve()
-    files = directory_files(root)
+    files = directory_files(root) if files is None else files
     index = SidecarIndex(files)
     names = [f'{video.stem}-{kind}' for kind in KINDS]
     candidates = []
@@ -43,3 +43,21 @@ def for_asset(engine, asset_id: int) -> Path | None:
         return backdrop(engine.file_for(asset_id))
     except (OSError, ValueError, MediaNotFound, MediaUnavailable):
         return None
+
+
+def for_assets(engine, asset_ids) -> dict[int, Path]:
+    """一页作品共用目录索引，保持每条媒体的路径授权。"""
+    directories = {}
+    found = {}
+    for asset_id in asset_ids:
+        try:
+            video = engine.file_for(asset_id)
+            root = video.parent.resolve()
+            if root not in directories:
+                directories[root] = directory_files(root)
+            path = backdrop(video, directories[root])
+            if path is not None:
+                found[asset_id] = path
+        except (OSError, ValueError, MediaNotFound, MediaUnavailable):
+            continue
+    return found

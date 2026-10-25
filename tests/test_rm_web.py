@@ -2034,6 +2034,27 @@ class WebDataTests(unittest.TestCase):
         bounded = rm_web.q_items(self.contract, {"limit": "-1", "offset": "-2", "seed": "1"})
         self.assertEqual([item["id"] for item in bounded["items"]], [1])
 
+    def test_code_sort_is_natural_case_insensitive_and_precedes_pagination(self):
+        values = ['AB-10', 'ab-2', 'AA-100', '', None, 'AB-002']
+        with self.contract.write_transaction() as connection:
+            connection.executemany(
+                "INSERT INTO asset(id,location,path,name,medium,code) VALUES(?,'local',?,?,'video',?)",
+                [(400 + index, f'code-sort-{index}.mp4', f'code-sort-{index}.mp4', code)
+                 for index, code in enumerate(values)])
+        args = {'q': 'code-sort', 'sort': 'code', 'limit': '1'}
+        ids = [q_items(self.contract, {**args, 'offset': str(index)})['items'][0]['id']
+               for index in range(len(values))]
+        self.assertEqual(ids, [402, 401, 405, 400, 403, 404])
+        reverse = q_items(self.contract, {**args, 'dir': 'desc', 'limit': '100'})['items']
+        self.assertEqual([row['id'] for row in reverse], [400, 405, 401, 402, 404, 403])
+
+    def test_name_sort_uses_catalog_title_and_falls_back_to_file_name(self):
+        with self.contract.write_transaction() as connection:
+            connection.execute("UPDATE asset SET catalog_title='Zebra' WHERE id=1")
+            connection.execute("UPDATE asset SET catalog_title='Alpha' WHERE id=2")
+        rows = q_items(self.contract, {'sort': 'name', 'medium': 'video'})['items']
+        self.assertEqual([row['id'] for row in rows], [2, 1])
+
     def test_named_items_sort_over_the_complete_filtered_result_with_stable_pages(self):
         with self.contract.write_transaction() as connection:
             connection.executemany(

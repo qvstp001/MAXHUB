@@ -35,6 +35,7 @@ export interface AppSettings {
   relatedLimit: number;
   javLayout: string;
   homeLayout: string;
+  posterWidth: number;
   javImage: string;
   followLayout: string;
   peopleLayout: string;
@@ -60,7 +61,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS = {
   batchSize: 60, defaultSort: 'seed', sortDefaultsVersion: 3, hoverDelaySeconds: 5, seekSeconds: 10,
-  searchHistoryLimit: 10, relatedLimit: 20, javLayout: 'big', homeLayout: 'small', javImage: 'cover',
+  searchHistoryLimit: 10, relatedLimit: 20, javLayout: 'big', homeLayout: 'small', javImage: 'cover', posterWidth: 180,
   followLayout: 'default', peopleLayout: 'big', photoSize: 'small', ambientMode: true, miniplayer: true,
   theaterMode: false, theme: 'system', groupCollapse: true, sidebarOrder: [...DEFAULT_SIDEBAR_ORDER],
   homeGlow: DEFAULT_HOME_GLOW, accent: DEFAULT_ACCENT,
@@ -103,6 +104,7 @@ export function normalizeAppSettings(raw: unknown): { settings: AppSettings; mig
   settings.feedHideExcerpts = settings.feedHideExcerpts !== false;
   settings.searchHistoryLimit = boundedPreference(+(settings.searchHistoryLimit as number), 0, 50, 10);
   settings.relatedLimit = boundedPreference(+(settings.relatedLimit as number), 0, 60, 20);
+  settings.posterWidth = boundedPreference(+(settings.posterWidth as number), 140, 260, 180);
   Object.assign(settings, normalizeJavPreferences(settings));
   settings.theme = allowedSetting(settings.theme, THEME_CHOICES, 'system');
   settings.homeGlow = normalizeHomeGlow(settings.homeGlow);

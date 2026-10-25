@@ -240,6 +240,9 @@ export interface Artwork {
 
 const NO_ARTWORK: Artwork = { kind: '', html: '' };
 
+const backdropArtwork = (item: CoverItem, eager: boolean): Artwork => ({ kind: 'thumb',
+  html: `<img class="poster" data-backdrop-image="${item.id}" src="/backdrop?id=${item.id}" width="640" height="360" alt="" loading="${eager ? 'eager' : 'lazy'}">` });
+
 /** 番号作品的封面：按「JAV 默认封面」取官方封套或预览图，两种来源都挂在元素上，
  *  设置一换 `syncJavImages` 原地换图。取景数据跟着元素走，从预览图切回封面时还找得到框。 */
 export function javArtwork(item: CoverItem, layout: 'big' | 'small', eager: boolean, javImage: unknown): Artwork {
@@ -262,6 +265,7 @@ export function javArtwork(item: CoverItem, layout: 'big' | 'small', eager: bool
  *  预览格。`size` 是这一屏的大图／小图，只施加给番号作品。 */
 export function cardArtwork(item: CoverItem & { follow_thumb_url?: string | null }, size: 'big' | 'small',
   eager: boolean, javImage: unknown): Artwork {
+  if (size === 'small' && item.has_backdrop) return backdropArtwork(item, eager);
   if (item.is_jav) return javArtwork(item, size, eager, javImage);
   if (item.follow_thumb_url) {
     return {
@@ -275,6 +279,7 @@ export function cardArtwork(item: CoverItem & { follow_thumb_url?: string | null
 /** Mix 的一张画面，播放队列每一行的小图也是它：番号作品走封套链，其余取本地预览格，同一条
  *  在两处长得一样。`size` 只施加给番号作品。 */
 export function mixFace(item: CoverItem, size: 'big' | 'small', eager: boolean, javImage: unknown): Artwork {
+  if (size === 'small' && item.has_backdrop) return backdropArtwork(item, eager);
   if (item.is_jav) return javArtwork(item, size, eager, javImage);
   if (item.has_cover && item.cover_key) return { kind: 'cover', html: coverImage(item, size, eager) };
   if (!item.has_thumb && !item.has_local_poster) return NO_ARTWORK;

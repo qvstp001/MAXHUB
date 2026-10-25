@@ -1,8 +1,9 @@
 /* 目录排序的词表：有哪几列、每一列的方向怎么说、旧键怎么换成新键。壳的地址解析、筛选条的排序钮与
  * 启动时的设置归一化（`appearance/settings.ts`）读的都是这一份。 */
 
-/** `[键, 显示名]`。随机排第一：它是出厂默认，也没有方向。 */
+/** `[键, 显示名]`。番号、名称按字母顺序；随机是出厂默认。 */
 export const SORTS: readonly (readonly [key: string, label: string])[] = [
+  ['code', '番号'], ['name', '名称'],
   ['seed', '随机'], ['rating', '评分'], ['o', '高潮计数'], ['plays', '观看次数'], ['dur', '时长'],
   ['size', '体积'], ['new', '入库时间'], ['played', '观看时间'],
 ];
@@ -16,6 +17,7 @@ export type SortDirWords = Readonly<Record<string, readonly [desc: string, asc: 
 /* 方向词按列各自定义：同一个 desc 在时间列上是「从新到旧」，在时长上是「从长到短」，
    写成通用的「降序」等于让界面解释 SQL。数组是 [desc,asc]，在表里就等于这一列可翻转。 */
 export const SORT_DIR_WORDS: SortDirWords = {
+  code: ['从后到前', '从前到后'], name: ['从后到前', '从前到后'],
   rating: ['从高到低', '从低到高'], o: ['从多到少', '从少到多'],
   plays: ['从多到少', '从少到多'], dur: ['从长到短', '从短到长'], size: ['从大到小', '从小到大'],
   new: ['从新到旧', '从旧到新'], played: ['从近到远', '从远到近'], release: ['从新到旧', '从旧到新'],
@@ -32,8 +34,9 @@ export const SORT_ALIASES: Readonly<Record<string, readonly [sort: string, dir: 
 export const sortDirWord = (key: string, dir: string, words: SortDirWords = SORT_DIR_WORDS): string =>
   (words[key] || [])[dir === 'asc' ? 1 : 0] || '';
 
-/** 一列的默认方向：可翻转的列从 desc 起，随机这类没有方向的列是空串。 */
-export const defaultSortDir = (key: string, words: SortDirWords = SORT_DIR_WORDS): string => (words[key] ? 'desc' : '');
+/** 番号与名称默认升序，其余可翻转列默认降序，随机没有方向。 */
+export const defaultSortDir = (key: string, words: SortDirWords = SORT_DIR_WORDS): string =>
+  key === 'code' || key === 'name' ? 'asc' : (words[key] ? 'desc' : '');
 
 /* 点未选中项＝换列并用该列的默认方向；点选中项＝翻方向。随机没有方向，重复点它
    什么都不做——换一批是它旁边那枚按钮的事。 */
@@ -47,7 +50,8 @@ export function nextSortState(
 
 /** 首页未指定方向时使用浏览偏好；显式 URL 始终优先。 */
 export function preferredDirection(sort: string, preferredSort: string, direction: unknown): string {
-  return sort === 'seed' ? '' : sort === preferredSort && direction === 'asc' ? 'asc' : 'desc';
+  return sort === 'seed' ? '' : sort === preferredSort && (direction === 'asc' || direction === 'desc')
+    ? direction : defaultSortDir(sort);
 }
 
 /** 地址上的 `sort` 与 `dir` 一次解成列和方向。旧键自带方向；`dir` 显式写了就听它的；写了列、没写方向是那一列的
@@ -60,6 +64,6 @@ export function sortFromAddress(
   const sort = key && SORT_KEYS.includes(key) ? key : fallback;
   if (!SORT_DIR_WORDS[sort]) return { sort, dir: '' };
   const dir = rawDir === 'asc' || rawDir === 'desc' ? rawDir
-    : alias ? alias[1] : rawSort ? 'desc' : preferredDirection(sort, preferredSort, direction);
+    : alias ? alias[1] : rawSort ? defaultSortDir(sort) : preferredDirection(sort, preferredSort, direction);
   return { sort, dir };
 }

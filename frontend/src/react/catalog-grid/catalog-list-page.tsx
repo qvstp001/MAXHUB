@@ -23,6 +23,7 @@ import './catalog-list.css';
 
 const features = tableFeatures({ rowSortingFeature, rowSelectionFeature, rowPaginationFeature });
 const sortOptions = [
+  { id: 'code', label: '番号' },
   { id: 'name', label: '名称' }, { id: 'dur', label: '时长' }, { id: 'size', label: '体积' },
   { id: 'new', label: '入库时间' }, { id: 'release', label: '发行时间' },
   { id: 'rating', label: '评分' }, { id: 'o', label: '高潮计数' },

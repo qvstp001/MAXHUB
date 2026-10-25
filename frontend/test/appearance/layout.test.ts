@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDensity, currentDensity, paintPhotoSizeButton, toggleDensity } from '../../src/appearance/density';
 import {
   cardLayoutFor, cardRatio, COVER_FRONT_RATIO, gridLayout, photoLayout, photoSize, storePhotoLayout, storePhotoSize,
-  storeVideoLayout,
+  storeVideoLayout, posterWidth, JAV_LAYOUTS,
 } from '../../src/appearance/layout';
 import { normalizeAppSettings, SETTINGS_KEY } from '../../src/appearance/settings';
 import { applyTheme, THEME_OPTIONS } from '../../src/appearance/theme';
@@ -13,6 +13,18 @@ import { createSettingsStore } from '../../src/settings-store';
 const settingsWith = (patch: Record<string, unknown> = {}) => ({ ...normalizeAppSettings({}).settings, ...patch });
 
 describe('卡片版式', () => {
+  it('视频模式标记海报和横幅，海报宽度有上下限且参与版式更新', () => {
+    expect(JAV_LAYOUTS.map(([, label]) => label)).toEqual(['海报', '横幅']);
+    expect([posterWidth({}), posterWidth({ posterWidth: 1 }), posterWidth({ posterWidth: 900 })])
+      .toEqual([180, 140, 260]);
+    const settings = settingsWith({ posterWidth: 200 });
+    const context = { active: true, home: true, portrait: false };
+    const first = gridLayout(context, settings);
+    settings.posterWidth = 220;
+    expect(gridLayout(context, settings)).not.toBe(first);
+    expect(gridLayout(context, settings).posterWidth).toBe(220);
+    expect(normalizeAppSettings({ posterWidth: 900 }).settings.posterWidth).toBe(180);
+  });
   it('首页读首页那一份，别处读 JAV 那一份；旧值并进两档', () => {
     const settings = settingsWith({ homeLayout: 'big', javLayout: 'sleeve' });
     expect([cardLayoutFor(true, settings), cardLayoutFor(false, settings)]).toEqual(['big', 'small']);
@@ -26,7 +38,7 @@ describe('卡片版式', () => {
     settings.homeLayout = 'big';
     const changed = gridLayout(context, settings);
     expect(changed).not.toBe(first);
-    expect(changed).toEqual({ active: true, size: 'big', portrait: false, javImage: 'cover' });
+    expect(changed).toEqual({ active: true, size: 'big', portrait: false, javImage: 'cover', posterWidth: 180 });
   });
 
   it('骨架与真卡同一个比例：竖屏 9:16，分大小图的路径上大图取正封比例，其余 16:9', () => {

@@ -372,6 +372,8 @@
   background-size: 50% 100%;
   animation: peach-skeleton-sweep 1.5s ease-in-out infinite reverse;
 }
+.peach-react [data-poster-size-control] { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); white-space: nowrap; }
+.peach-react [data-poster-size-control] > div { width: 160px; }
 /* 头像框上那层「图还在路上」的微光（遗留层 `watchPendingImages` 标的类）也画在 `::after` 上，已经收尾的框
  * 别把它一起藏掉。那枚类名不归岛管，这里按属性认它。 */
 .peach-react [data-refreshing] [data-tier-ring][class~="ui-imgdone"]::after {

@@ -129,7 +129,7 @@ class LibraryNfoTests(unittest.TestCase):
         self.assertEqual(result['checked'], 2)
 
     @windows_ledger_roots
-    def test_a_later_source_requires_review_to_replace_a_field_filled_during_the_run(self):
+    def test_local_metadata_prevents_external_queries_and_global_followups(self):
         media = self.root / 'media'
         media.mkdir()
         (media / 'SSIS-057.mp4').write_bytes(b'video')
@@ -139,43 +139,20 @@ class LibraryNfoTests(unittest.TestCase):
         config = PeachConfig(self.root, self.root / 'config.toml', present=True,
                              locations={'local': (str(media),)})
         database = LedgerDatabase(db)
-        provider = stub_provider()
-        provider.cover.return_value = False
-
-        def tags():
-            with database.read_connection() as connection:
-                return {row[0] for row in connection.execute(
-                    "SELECT tag FROM asset_tag WHERE asset_id=1 AND tag NOT LIKE '演员:%'")}
-
-        def query(code, source='r18dev', **kwargs):
-            if source == 'javdb':
-                self.assertIn('巨乳', tags())
-                return {'id': code, 'genres': ['高跟鞋', '絲襪']}
-            if source == 'dmm':
-                raise NotFound('没有')
-            return {'id': code, 'title': '本地标题', 'maker': 'Prestige', 'release_date': '2023-05-26',
-                    'actresses': [{'japanese_name': '涼森れむ'}], 'genres': ['巨乳']}
-
-        provider.query.side_effect = query
-        with patch('peach.library_processing._enrich_finished_performers',
-                   return_value={'aliases': 0, 'avatars': 0, 'conflicts': 0, 'failed': 0}):
-            process_library(config, db, self.root / 'generated', self.root / 'covers',
-                            provider_factory=lambda: provider, database=database,
-                            route_overrides='censored=r18dev,javdb')
-        self.assertEqual(tags(), {'巨乳'})
-        group = next(row for row in read_rows(self.root / 'generated/library-metadata-field-candidates.csv')
-                     if row['field'] == 'tags')
-        choice = next(item for item in json.loads(group['candidates_json']) if item['source'] == 'javdb')
-        self.assertTrue(choice['requires_review'])
-        from peach.web_contract import WebContract
-        from peach.web_review import q_review, w_review_decision
-        contract = WebContract(db, candidate_root=self.root / 'generated', database=database)
-        pending = q_review(contract)['sections']['metadata_fields']
-        decision = next(item for item in pending if item['field'] == 'tags')
-        w_review_decision(contract, {'category': 'metadata_fields', 'item_key': decision['item_key'],
-            'status': 'approved', 'candidate_key': choice['candidate_key'],
-            'expected_revision': decision['asset_mutation_revision']})
-        self.assertEqual(tags(), {'高跟', '丝袜'})
+        factory = Mock(side_effect=AssertionError('本地作品不能创建外部来源'))
+        with patch('peach.library_processing.sample_followup.plan') as samples, \
+                patch('peach.library_processing._entity_followups') as entities:
+            result = process_library(config, db, self.root / 'generated', self.root / 'covers',
+                                     provider_factory=factory, database=database)
+            resumed = process_library(config, db, self.root / 'generated', self.root / 'covers',
+                                      provider_factory=factory, database=database, resume_state=result)
+        factory.assert_not_called()
+        samples.assert_not_called()
+        entities.assert_not_called()
+        self.assertEqual(result['followups'], [])
+        self.assertEqual(resumed['followups'], [])
+        with database.read_connection() as connection:
+            self.assertEqual(connection.execute('SELECT catalog_title FROM asset').fetchone()[0], '本地标题')
 
     @windows_ledger_roots
     def test_a_confirmed_site_is_visible_before_another_site_reaches_its_deadline(self):
@@ -301,6 +278,7 @@ class LibraryNfoTests(unittest.TestCase):
             (media / f'{code}.mp4').write_bytes(b'video')
             (media / f'{code}.nfo').write_text(
                 f'<movie><id>{code}</id><title>本地 {code}</title></movie>', encoding='utf-8')
+        (media / 'ABW-360.mp4').write_bytes(b'video')
         seen = []
 
         def query(*args, **kwargs):
@@ -313,12 +291,13 @@ class LibraryNfoTests(unittest.TestCase):
         def previews(*args, **kwargs):
             with closing(sqlite3.connect(db)) as connection:
                 self.assertEqual(connection.execute('SELECT catalog_title FROM asset ORDER BY id').fetchall(),
-                                 [('本地 ABW-358',), ('本地 ABW-359',)])
+                                 [('本地 ABW-358',), ('本地 ABW-359',), (None,)])
 
         with self.assertRaises(KeyboardInterrupt), patch('peach.library_processing._generate_previews', side_effect=previews):
             process_library(config, db, self.root / 'generated', self.root / 'covers',
                             provider_factory=lambda: provider, database=LedgerDatabase(db))
-        self.assertEqual(seen, [[('本地 ABW-358',), ('本地 ABW-359',)]])
+        self.assertEqual(seen, [[('本地 ABW-358',), ('本地 ABW-359',), (None,)]])
+        self.assertEqual(provider.query.call_args.args[0], 'ABW-360')
         self.assertTrue(read_rows(self.root / 'generated/library-metadata-field-candidates.csv'))
 
     @windows_ledger_roots
@@ -450,7 +429,7 @@ class LibraryNfoTests(unittest.TestCase):
         self.assertIsNone(sidecars(video)[0])
 
     @windows_ledger_roots
-    def test_shared_nfo_fills_parts_and_verifies_cached_remote_metadata(self):
+    def test_shared_nfo_fills_parts_without_external_metadata(self):
         media = self.root / 'media'
         media.mkdir()
         for part in (1, 2):
@@ -477,7 +456,7 @@ class LibraryNfoTests(unittest.TestCase):
                                      provider_factory=factory, database=LedgerDatabase(db),
                                      route_overrides='censored=r18dev')
         self.assertEqual(result['status'], 'complete')
-        provider.query.assert_called_once()
+        factory.assert_not_called()
         with closing(sqlite3.connect(db)) as connection:
             self.assertEqual(connection.execute(
                 'SELECT code,catalog_title,studio FROM asset ORDER BY name').fetchall(),
@@ -486,9 +465,9 @@ class LibraryNfoTests(unittest.TestCase):
                 "SELECT count(*) FROM review_decision WHERE status='approved'").fetchone()[0], 10)
 
     @windows_ledger_roots
-    def test_nfo_errors_allow_remote_fill_and_existing_values_require_review(self):
+    def test_nfo_errors_allow_remote_fill_and_valid_partial_nfo_stays_local(self):
         from peach.web_contract import WebContract
-        from peach.web_review import q_review, w_review_decision
+        from peach.web_review import q_review
         documents = (
             '<movie><title>未闭合',
             '<metadata><title>其他格式</title></metadata>',
@@ -520,32 +499,14 @@ class LibraryNfoTests(unittest.TestCase):
                     for _ in range(2):
                         process_library(config, db, generated, covers, provider_factory=Mock(return_value=provider),
                                         database=LedgerDatabase(db), route_overrides='censored=r18dev')
-                provider.query.assert_called_once()
+                self.assertEqual(provider.query.call_count, 0 if index == 3 else 1)
                 with closing(sqlite3.connect(db)) as connection:
                     title, date = connection.execute('SELECT catalog_title,release_date FROM asset').fetchone()
-                self.assertEqual(date, '2023-05-26')
+                self.assertEqual(date, None if index == 3 else '2023-05-26')
                 self.assertEqual(title, '本地标题' if index == 3 else '在线标题')
                 contract = WebContract(db, candidate_root=generated, cover_root=covers)
                 queue = q_review(contract)['sections']['metadata_fields']
-                self.assertEqual([row['field'] for row in queue], ['title'] if index == 3 else [])
-                if queue:
-                    row = queue[0]
-                    choice = next(candidate for candidate in row['candidates'] if candidate['source'] == 'r18dev')
-                    w_review_decision(contract, {
-                        'category': 'metadata_fields', 'item_key': row['item_key'], 'status': 'approved',
-                        'candidate_key': choice['candidate_key'],
-                        'expected_revision': row['asset_mutation_revision'],
-                    })
-                    self.assertEqual(q_review(contract)['sections']['metadata_fields'], [])
-                    with closing(sqlite3.connect(db)) as connection:
-                        self.assertEqual(connection.execute('SELECT catalog_title FROM asset').fetchone()[0], '在线标题')
-                    with patch('peach.library_processing._asks_cover', return_value=False), \
-                            patch('peach.library_processing._generate_previews', return_value=0), \
-                            patch('peach.library_processing._enrich_finished_performers',
-                                  return_value={'aliases': 0, 'avatars': 0, 'conflicts': 0, 'failed': 0}):
-                        process_library(config, db, generated, covers, provider_factory=Mock(return_value=provider),
-                                        database=LedgerDatabase(db), route_overrides='censored=r18dev')
-                    self.assertEqual(q_review(contract)['sections']['metadata_fields'], [])
+                self.assertEqual(queue, [])
 
     def test_releases_sharing_a_folder_keep_their_same_name_posters(self):
         for code in ('ABC-123', 'ABC-124'):
@@ -727,7 +688,7 @@ class LibraryNfoTests(unittest.TestCase):
                          _candidate_identity('local_nfo', candidate['value']))
 
     @windows_ledger_roots
-    def test_new_import_normalizes_nfo_tags_and_enriches_the_same_performer(self):
+    def test_local_import_normalizes_tags_without_external_performer_enrichment(self):
         media = self.root / 'media'
         media.mkdir()
         (media / 'ABW-358.mp4').write_bytes(b'video')
@@ -766,8 +727,8 @@ class LibraryNfoTests(unittest.TestCase):
                 database=LedgerDatabase(db))
 
         self.assertEqual(result['status'], 'complete')
-        self.assertEqual(result['performer_aliases'], 2)
-        self.assertEqual(result['performer_avatars'], 1)
+        self.assertEqual(result['performer_aliases'], 0)
+        self.assertEqual(result['performer_avatars'], 0)
         with closing(sqlite3.connect(db)) as connection:
             entity_id = connection.execute(
                 "SELECT id FROM entity WHERE kind='performer' AND canonical_name='涼森れむ'").fetchone()[0]
@@ -775,11 +736,12 @@ class LibraryNfoTests(unittest.TestCase):
                 'SELECT alias FROM entity_alias WHERE entity_id=?', (entity_id,))}
             tags = {row[0] for row in connection.execute(
                 "SELECT tag FROM asset_tag WHERE tag NOT LIKE '演员:%'")}
-        self.assertEqual(aliases, {'すずもりれむ', 'Remu Suzumori'})
+        self.assertEqual(aliases, set())
         self.assertEqual(tags, {'主观视角', '苗条'})
-        self.assertTrue((self.root / 'generated' / 'avatars'
-                         / f'performer-{entity_id}.img').is_file())
-        transport.assert_called_once()
+        self.assertFalse((self.root / 'generated' / 'avatars'
+                          / f'performer-{entity_id}.img').is_file())
+        transport.assert_not_called()
+        provider.query.assert_not_called()
 
     @windows_ledger_roots
     def test_no_code_video_pairs_with_its_sibling_image_without_nfo(self):
@@ -837,7 +799,7 @@ class LibraryNfoTests(unittest.TestCase):
         self.assertFalse((self.root / 'ledger.db').exists())
 
     @windows_ledger_roots
-    def test_local_metadata_remote_completion_and_repeat_are_one_pipeline(self):
+    def test_local_metadata_and_repeat_never_create_an_external_provider(self):
         from PIL import Image
         media = self.root / 'media'
         media.mkdir()
@@ -857,26 +819,21 @@ class LibraryNfoTests(unittest.TestCase):
         self.assertEqual(result['identified'], 1)
         self.assertEqual(result['covers'], 1)
         provider.cover.assert_not_called()
-        self.assertEqual([call.args for call in provider.query.call_args_list],
-                         [('ABW-358', 'r18dev'), ('ABW-358', 'dmm')])
-        self.assertIn('deadline', provider.query.call_args.kwargs)
+        factory.assert_not_called()
         groups = read_rows(self.root / 'generated/library-metadata-field-candidates.csv')
-        studio = next(row for row in groups if row['field'] == 'studio')
-        self.assertEqual(json.loads(studio['candidates_json'])[0]['catalog_evidence']['runtime']['value'], 210)
-        # 成功快照和未取得记录均在有效期内，重复核查直接复用。
+        self.assertNotIn('studio', {row['field'] for row in groups})
         second = process_library(config, db, self.root / 'generated', self.root / 'covers', provider_factory=factory)
         self.assertEqual(second['status'], 'complete')
         self.assertEqual(second['candidates'], result['candidates'])
-        self.assertEqual([call.args for call in provider.query.call_args_list],
-                         [('ABW-358', 'r18dev'), ('ABW-358', 'dmm')])
+        factory.assert_not_called()
         asked = (provider.query.call_count, provider.community.call_count, provider.amane.call_count)
         process_library(config, db, self.root / 'generated', self.root / 'covers', provider_factory=factory)
         self.assertEqual((provider.query.call_count, provider.community.call_count, provider.amane.call_count),
                          asked)
 
     @windows_ledger_roots
-    def test_local_nfo_fields_keep_remote_differences_for_review(self):
-        """本地字段优先补空，在线不同值保留为覆盖复核候选。"""
+    def test_partial_local_nfo_is_sufficient_to_skip_external_fields(self):
+        """本地资料存在时，空缺字段也不触发外部采集。"""
         from PIL import Image
         media = self.root / 'media'
         media.mkdir()
@@ -893,9 +850,11 @@ class LibraryNfoTests(unittest.TestCase):
                         provider_factory=Mock(return_value=provider))
         groups = {row['field']: [entry['source'] for entry in json.loads(row['candidates_json'])]
                   for row in read_rows(self.root / 'generated/library-metadata-field-candidates.csv')}
-        self.assertEqual(groups['title'], ['local_nfo', 'r18dev'])
-        self.assertEqual(groups['performers'], ['local_nfo', 'r18dev'])
-        self.assertEqual(groups['studio'], ['r18dev'])
+        self.assertEqual(groups['title'], ['local_nfo'])
+        self.assertEqual(groups['performers'], ['local_nfo'])
+        self.assertNotIn('studio', groups)
+        provider.query.assert_not_called()
+        provider.cover.assert_not_called()
 
     @windows_ledger_roots
     def test_online_sources_only_offer_fields_the_ledger_has_no_value_for(self):
@@ -933,9 +892,8 @@ class LibraryNfoTests(unittest.TestCase):
         self.assertEqual([call.args[1] for call in provider.query.call_args_list], ['r18dev', 'javdb'])
 
     @windows_ledger_roots
-    def test_a_performer_marker_is_not_a_content_tag_the_ledger_already_has(self):
-        """`演员:` 是出演者在 `asset_tag` 上的扁平投影，算成标签就再也采不回 genre。
-        """
+    def test_stored_metadata_without_nfo_skips_external_collection(self):
+        """账本已有资料时，不为缺少的标签触发外部采集。"""
         media = self.root / 'media'
         media.mkdir()
         (media / 'MIDE-612.mp4').write_bytes(b'video')
@@ -955,8 +913,10 @@ class LibraryNfoTests(unittest.TestCase):
             connection.execute("INSERT INTO asset_tag(asset_id, tag, confidence, source) VALUES(?,?,?,?)",
                                (asset_id, '演员:本田岬', 1.0, 'user'))
         candidates.unlink()
+        factory.reset_mock()
         process_library(config, db, self.root / 'generated', self.root / 'covers', provider_factory=factory)
-        self.assertIn('tags', {row['field'] for row in read_rows(candidates, missing_ok=True)})
+        self.assertEqual(list(read_rows(candidates, missing_ok=True)), [])
+        factory.assert_not_called()
 
     def _collect_with_maker(self, code, maker, payload, r18dev=None, javdb=None):
         """一部有码片走采集，官方档由经桥的片商站 `maker` 答 `payload`；返回 (provider, 候选行)。"""

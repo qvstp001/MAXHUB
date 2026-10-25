@@ -1139,6 +1139,11 @@ def _missing_fields(row, local_fields=()):
             if field not in local_fields and not row.get(COLUMN_OF.get(field, field))]
 
 
+def _local_metadata_present(row, payload):
+    """有效 NFO 或账本已有的作品资料让这一部保持本地处理。"""
+    return bool(payload) or any(row.get(COLUMN_OF.get(field, field)) for field in LABELS)
+
+
 def _answered_sources(groups, target_key, fields):
     """在 `fields` 里哪一个字段上已经有自己一条候选的来源；这一行不再问它们。
 
@@ -1599,7 +1604,7 @@ def _enrich_finished_performers(database, groups, config, candidate_root, remote
                                 issue=lambda asset, message, **options: None):
     """自动落库启用时补同一人物的资料；只采集候选时保持完全只读。"""
     empty = {'aliases': 0, 'avatars': 0, 'conflicts': 0, 'failed': 0}
-    if database is None or not active():
+    if database is None or not groups or not active():
         return empty
     from .metadata_performer_profiles import enrich_performer_profiles
     # 问题清单要的是这条资产的 id 和路径，候选行上都有。
@@ -1846,13 +1851,20 @@ def _candidate_scope(groups, asset_ids):
 
 
 def _finish_collection(config, database, candidate_root, cover_root, groups, remote, *,
-                       asset_ids, active, update, issue, watermark, covered):
+                       asset_ids, active, update, issue, watermark, covered, local_only_ids=()):
     """结算本趟候选并补人物资料，全库任务同时推进存量后继。"""
     auto_apply = _apply_finished_candidates(database, candidate_root, active, asset_ids)
+    local_only = {str(value) for value in local_only_ids}
+    external_groups = {key: group for key, group in _candidate_scope(groups, asset_ids).items()
+                       if str(group.get('asset_id')) not in local_only}
     profiles = _enrich_finished_performers(
-        database, _candidate_scope(groups, asset_ids), config, candidate_root, remote, active, update, issue)
-    followups = [] if asset_ids is not None else sample_followup.plan(database, config, cover_root)
-    followups += _entity_followups(database, config, watermark, covered, include_stock=asset_ids is None)
+        database, external_groups, config, candidate_root, remote, active, update, issue)
+    # 全库后继会再次选中本地资料齐备的作品；本地优先任务不派这些外部补充任务。
+    followups = []
+    if not local_only:
+        if asset_ids is None:
+            followups = sample_followup.plan(database, config, cover_root)
+        followups += _entity_followups(database, config, watermark, covered, include_stock=asset_ids is None)
     return dict(followups=followups, auto_applied=auto_apply['applied'],
                 auto_rejected=auto_apply['auto_rejected'], performer_aliases=profiles['aliases'],
                 performer_avatars=profiles['avatars'], performer_profile_conflicts=profiles['conflicts'],
@@ -2171,13 +2183,20 @@ class _LocalEvidenceCache:
         self.config, self.db_path, self.cover_root = config, db_path, cover_root
         self.listing, self.state, self.path = listing, state, path
 
+    def cached(self, row):
+        cached_path = self.state['local_metadata'].get(_checkpoint_key(row))
+        try:
+            return json.loads(Path(cached_path).read_text(encoding='utf-8')) if cached_path else None
+        except (OSError, ValueError):
+            return None
+
+    def has_metadata(self, row):
+        cached = self.cached(row)
+        return _local_metadata_present(row, cached['local'][2] if cached else None)
+
     def read(self, row, update, issue, poster_jobs):
         key = _checkpoint_key(row)
-        cached_path = self.state['local_metadata'].get(key)
-        try:
-            cached = json.loads(Path(cached_path).read_text(encoding='utf-8')) if cached_path else None
-        except (OSError, ValueError):
-            cached = None
+        cached = self.cached(row)
         if cached is not None:
             code, verify, payload, entries = cached['local']
             poster_jobs.extend((row, Path(source), name, Path(target))
@@ -2380,6 +2399,7 @@ def process_library(config, db_path, candidate_root, cover_root, *, location='co
                 update(candidates=len(scoped_groups()), auto_applied=state['auto_applied'])
 
             prepared = []
+            local_only_ids = {row['id'] for row in rows if local_evidence.has_metadata(row)}
             poster_jobs = []
             local_rows = list(checkpoints.remaining_metadata(rows))
             completed_count = len(rows) - len(local_rows)
@@ -2395,6 +2415,8 @@ def process_library(config, db_path, candidate_root, cover_root, *, location='co
                     continue
                 code, verify_existing, payload, entries = local
                 local_fields = _fields(payload, genre_decisions) if payload else {}
+                if _local_metadata_present(row, payload):
+                    local_only_ids.add(row['id'])
                 publish(row, code, local_fields, verify_existing, entries)
                 if code or payload:
                     prepared.append((row, code, verify_existing, local_fields, entries,
@@ -2434,11 +2456,13 @@ def process_library(config, db_path, candidate_root, cover_root, *, location='co
                        total=completed_count + len(prepared), current_asset_id=row['id'],
                        current_asset_name=Path(str(row['name'] or '')).name)
                 target_key = f"asset:{row['id']}"
-                missing = list(COLLECTED_FIELDS) if verify_existing else _missing_fields(row, local_fields)
-                found, covers = remote.collect(row, code, missing, cover_root, update=update, issue=issue,
-                    answered=() if verify_existing else _answered_sources(groups, target_key, missing),
-                    received=lambda entries, row=row, code=code, fields=local_fields, verify=verify_existing:
-                        publish(row, code, fields, verify, entries))
+                found, covers = [], 0
+                if row['id'] not in local_only_ids:
+                    missing = _missing_fields(row, local_fields)
+                    found, covers = remote.collect(row, code, missing, cover_root, update=update, issue=issue,
+                        answered=_answered_sources(groups, target_key, missing),
+                        received=lambda entries, row=row, code=code, fields=local_fields, verify=verify_existing:
+                            publish(row, code, fields, verify, entries))
                 state['covers'] += covers
                 covered.append((row['id'], covers))
                 update(stage='保存待确认资料', current_action='writing_candidates',
@@ -2454,7 +2478,8 @@ def process_library(config, db_path, candidate_root, cover_root, *, location='co
             # 核心处理层不反向依赖 Web 复核层；CLI 与 Web 两个组装入口都传入同一实现。
             summary = _finish_collection(
                 config, database, candidate_root, cover_root, groups, remote, asset_ids=scope_ids,
-                active=active, update=update, issue=issue, watermark=entity_watermark, covered=covered)
+                active=active, update=update, issue=issue, watermark=entity_watermark, covered=covered,
+                local_only_ids=local_only_ids)
             summary['auto_applied'] = summary.get('auto_applied', 0) + state['auto_applied']
             summary['auto_rejected'] = summary.get('auto_rejected', 0) + state['auto_rejected']
             finish_step('collect')

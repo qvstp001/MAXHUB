@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+import re
 import time
 from . import entities, media_libraries, sample_images, settings_file
 
@@ -66,7 +67,8 @@ def attach_artwork_fields(contract: WebContract, item: dict) -> None:
 #: 每个方向都显式 `NULLS LAST`——升序时 SQLite 默认把 NULL 排在最前，
 #: 「时长最短」会先给出一整屏没有时长的条目。
 SORT_COLUMNS = {
-    "name": "a.name COLLATE NOCASE {d} NULLS LAST, a.id {d}",
+    "name": "COALESCE(NULLIF(TRIM(a.catalog_title),''),a.name) COLLATE NOCASE {d} NULLS LAST, a.id {d}",
+    "code": "NULLIF(TRIM(a.code),'') COLLATE PEACH_CODE {d} NULLS LAST, a.id {d}",
     "new": "a.first_seen {d} NULLS LAST, a.id {d}",
     "release": "a.release_date {d} NULLS LAST, a.first_seen {d} NULLS LAST, a.id {d}",
     "size": "a.size {d} NULLS LAST, a.id {d}",
@@ -326,7 +328,8 @@ def seeded_order(seed) -> str:
 def q_items(contract: WebContract, args):
     where, par = catalog_filter(contract, args)
     sort_key = str(args.get("sort") or "")
-    direction = "ASC" if str(args.get("dir") or "").lower() == "asc" else "DESC"
+    raw_direction = str(args.get('dir') or '').lower()
+    direction = 'ASC' if raw_direction == 'asc' or (not raw_direction and sort_key in {'code', 'name'}) else 'DESC'
     column = SORT_COLUMNS.get(sort_key)
     order = column.format(d=direction) if column else ("RANDOM()" if sort_key == "rand" else None)
     if order is None:
@@ -353,6 +356,8 @@ def q_items(contract: WebContract, args):
            f"AND w.profile_id='{DEFAULT_PROFILE_ID}') AS watch_later "
            "FROM asset a WHERE " + " AND ".join(where) + f" ORDER BY {order} LIMIT ? OFFSET ?")
     with contract.read_connection() as c:
+        if sort_key == 'code':
+            c.create_collation('PEACH_CODE', _compare_codes)
         rows = [dict(r) for r in c.execute(sql, par + [fetch_limit, off])]
         has_more = len(rows) > lim if not include_total else None
         rows = rows[:lim]
@@ -407,7 +412,9 @@ def q_items(contract: WebContract, args):
                 r["creator"] = r["creator_entity"]["name"]
             r["performer_total"] = len(refs) or len(all_performers)
             r["_entity_kinds"] = tuple(canonical)
+    backdrops = contract.backdrop_paths([row['id'] for row in rows])
     for r in rows:
+        r['has_backdrop'] = r['id'] in backdrops
         r["cost"] = cost_for(r['location'], r.get('path'))
         r["has_thumb"] = contract.has_snapshot(r["snapshot_path"])
         r['has_local_poster'] = (contract.poster_root / f"{r['id']}_4.jpg").is_file()
@@ -420,6 +427,15 @@ def q_items(contract: WebContract, args):
     attach_multipart_groups(contract, rows)
     attach_edition_groups(contract, rows)
     return {"total": cnt, "work_total": work_total, "bytes": total_bytes, "items": rows, "has_more": has_more}
+
+
+def _compare_codes(first: str, second: str) -> int:
+    """番号按字母及整数分段比较，分页仍由 SQLite 对全集排序。"""
+    def parts(value):
+        return tuple((1, int(part)) if part.isdigit() else (0, part.casefold())
+                     for part in re.split(r'(\d+)', value))
+    left, right = parts(first), parts(second)
+    return (left > right) - (left < right)
 
 def con_tags(contract: WebContract, ids, qm):
     with contract.read_connection() as c:

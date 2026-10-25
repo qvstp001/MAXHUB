@@ -18,6 +18,9 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tile)), 1fr));
   gap: 24px 16px;
 }
+.peach-react [data-card-mode="poster"] [data-media-grid] {
+  grid-template-columns: repeat(auto-fill, minmax(0, min(100%, var(--catalog-poster-width, 180px))));
+}
 /* 铺悬停面的卡按自己的内容定高、贴行顶：同一行里横版封面挨着竖版正封时，行高由竖版撑起，
  * 横版卡跟着拉满的话，悬停面就铺进封面和文字下面那一大块空白。回收站的卡与垃圾卡是有边的面，
  * 同一行照旧拉齐，垃圾卡的三颗键靠这个贴底。 */

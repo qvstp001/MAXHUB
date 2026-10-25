@@ -11,6 +11,7 @@ export interface NumberSpec { min: number; max: number; unit: string; optional?:
 
 export const NUMBER_SPECS = {
   batchSizeSetting: { min: 1, max: 200, unit: '个', fallback: 60 },
+  posterWidthSetting: { min: 140, max: 260, unit: 'px', fallback: 180 },
   hoverDelaySetting: { min: 1, max: 60, unit: '秒', optional: true, fallback: 5 },
   seekSecondsSetting: { min: 1, max: 300, unit: '秒', fallback: 10 },
   relatedLimitSetting: { min: 1, max: 60, unit: '个', optional: true, fallback: 20 },

@@ -179,6 +179,7 @@ preferencesState.settingsEffects = {
     document.documentElement.style.setProperty('--hover-delay',`${preferencesState.appSettings.hoverDelaySeconds}s`);
   },
   seekSeconds:()=>repaintCatalogGrid(),
+  posterWidth:()=>{repaintCatalogGrid();paintCatalogFilter()},
   /* 折叠是在渲染时做的，不重取的话已经被跳过的那些卡不会自己冒出来。 */
   groupCollapse:()=>reloadCurrentSurface(),
   feedAutoScroll:()=>syncFeedAutoScroll(),

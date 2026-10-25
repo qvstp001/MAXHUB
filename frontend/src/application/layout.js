@@ -16,7 +16,7 @@ import { entityJavLayout, notifyShell, pageOpens, runtimeConfigurable, selectMod
 import { censorOn, preferencesState, setCensored, setHighContrast } from './preferences.js';
 import { playUiSound } from '../ui-kit/sounds';
 import { THEME_OPTIONS } from './../appearance/theme';
-import { JAV_LAYOUTS, cardLayoutFor, storeHomeLayout, storeJavLayout, storeVideoLayout } from './../appearance/layout';
+import { JAV_LAYOUTS, cardLayoutFor, posterWidth, storeHomeLayout, storeJavLayout, storeVideoLayout } from './../appearance/layout';
 import { receiptsState } from './receipts.js';
 import { applySyncedSettings } from './../appearance/settings';
 import { loadManageHeader, loadSettingsPanel, loadSidebar, manageHeaderApi, sidebarApi } from '../react/application-residents';
@@ -272,6 +272,13 @@ export function syncVideoLayoutSetting(){
 
 export function setVideoLayout(value){
   storeVideoLayout(value);
+  syncVideoLayoutSetting();
+  repaintCatalogGrid();
+}
+
+export function setPosterWidth(value){
+  preferencesState.appSettings.posterWidth=posterWidth({posterWidth:value});
+  preferencesState.saveSettings();
   syncVideoLayoutSetting();
   repaintCatalogGrid();
 }

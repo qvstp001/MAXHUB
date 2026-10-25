@@ -17,6 +17,17 @@ const parse = (html: string): HTMLImageElement | null => {
 
 const FOCUS = { axis: 'y', pct: 12, box: { cx: 0.44, cy: 0.22, faceW: 67, imgW: 640, imgH: 960 } };
 
+it('横幅模式取本地横幅，海报模式保留封面，缺少横幅时使用现有图片回退', () => {
+  const item = { id: 12, is_jav: true, code: 'PCH-12', has_backdrop: true, has_cover: true };
+  const banner = parse(cardArtwork(item, 'small', false, 'cover').html)!;
+  expect(banner.getAttribute('src')).toBe('/backdrop?id=12');
+  expect(banner.hasAttribute('data-jav-image')).toBe(false);
+  expect(parse(cardArtwork(item, 'big', false, 'cover').html)?.getAttribute('src')).toContain('/cover?');
+  expect(parse(mixFace(item, 'small', false, 'cover').html)?.getAttribute('src')).toBe('/backdrop?id=12');
+  expect(parse(cardArtwork({ ...item, has_backdrop: false }, 'small', false, 'cover').html)?.getAttribute('src'))
+    .not.toContain('/backdrop');
+});
+
 describe('西方官方封面', () => {
   it('无番号作品在卡片、队列和详情使用资产封面键', () => {
     const item = { id: 12, has_cover: true, cover_key: 'ASSET-ID-12', cover_version: 'abc' };

@@ -7,7 +7,7 @@
  * 网格每接一页经 `onCount` 报一次总数与显示的卡数，读数画在首页筛选条（`catalog-filter` 岛）的
  * 下排。无限滚动见下面的 `LoadMore`：哨兵进入视口 320px
  * 内自动取下一页，点它等于手动取；失败在哨兵后面留一条可重试的 Note，之后只有手动才重试。 */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { useInfiniteQuery, type InfiniteData, type QueryKey } from '@tanstack/react-query';
 import { mixFace as mixArtwork, mixLabel, relayoutCovers, type Artwork } from '@peach/card-art';
 import { requestErrorMessage } from '@peach/legacy/core';
@@ -157,7 +157,9 @@ function GridBody(props: CatalogGridProps) {
     }
     return (
       <>
-        <div data-media-sections="" data-select-mode={props.selectMode ? '' : undefined}>
+        <div data-media-sections="" data-select-mode={props.selectMode ? '' : undefined}
+          data-card-mode={!trash && layout.active ? layout.size === 'big' ? 'poster' : 'banner' : undefined}
+          style={{ '--catalog-poster-width': `${Math.min(260, Math.max(140, layout.posterWidth || 180))}px` } as CSSProperties}>
           {splitSections(tiles, cuts).map((section) => (
             <Fragment key={section.start}>
               <div data-media-grid="" data-catalog-view-mode="cards">{section.tiles.map(card)}</div>
@@ -330,7 +332,7 @@ function HomeMix({ seed, layout, helpers, actions }: {
     <MixCard data-mix-seed={String(seed.id)} name={`Mix · ${label}`}
       caption={`${helpers.displayName(seed, seed.name || '')}及相似作品`} count={0} badge="Mix" glyph wholeCard
       poster={null} artwork={artwork}
-      artworkIdentity={size === 'small' ? artwork.html : mixFace(seed, { ...layout, size: 'small' }, false).html}
+      artworkIdentity={seed.has_backdrop || size === 'small' ? artwork.html : mixFace(seed, { ...layout, size: 'small' }, false).html}
       relayoutArt={(root) => relayoutCovers(root, size)}
       ratio={cardRatio(seed, 'grid', layout)}
       flipImages={flipImages} faceHtml={(id) => faces.current.get(id) || ''} canFlip={actions.canFlip}

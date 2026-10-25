@@ -256,6 +256,7 @@ def create_app(
     media_engine = MediaEngine(repository, filesystem)
     from . import local_artwork
     contract.backdrop_path = lambda asset_id: local_artwork.for_asset(media_engine, asset_id)
+    contract.backdrop_paths = lambda asset_ids: local_artwork.for_assets(media_engine, asset_ids)
     preview_service = PreviewService(
         repository, resolver, settings.snapshot_root, settings.poster_root,
         settings.avatar_root, settings.logo_root,

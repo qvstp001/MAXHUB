@@ -64,6 +64,7 @@ class LocalArtworkTests(unittest.TestCase):
             asset_id = connection.execute("SELECT id FROM asset WHERE name=?", (self.video.name,)).fetchone()[0]
         app = create_app(PeachSettings(db_path=db, configured=True, token='', allowed_media_roots=(self.root,)))
         with route_client(app) as client:
+            self.assertTrue(client.get('/api/items?sort=name').json()['items'][0]['has_backdrop'])
             self.assertTrue(client.get(f'/api/item?id={asset_id}').json()['has_backdrop'])
             response = client.get(f'/backdrop?id={asset_id}')
             self.assertEqual(response.status_code, 200)
@@ -78,5 +79,6 @@ class LocalArtworkTests(unittest.TestCase):
             self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), state)
         app = create_app(PeachSettings(db_path=db, configured=True, token='', allowed_media_roots=(self.root / 'denied',)))
         with route_client(app) as client:
+            self.assertFalse(client.get('/api/items?sort=name').json()['items'][0]['has_backdrop'])
             self.assertFalse(client.get(f'/api/item?id={asset_id}').json()['has_backdrop'])
             self.assertEqual(client.get(f'/backdrop?id={asset_id}').status_code, 404)

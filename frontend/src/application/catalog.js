@@ -10,7 +10,7 @@ import { dropBars, fetchBars, fetchTopsPage } from './../catalog-bars';
 import { confirmModal, dissolveValue, fitSkeleton, wireHorizontalScroller } from '../ui-kit';
 import { navigationState, paintSidebar, syncNavigation } from './navigation.js';
 import { disposeStage, mediaState, openEditions, openItem, openMix, openParts, openTok } from './media.js';
-import { buildManageBar, cardLayout, homeLayoutActive, javActive, layoutState, setHomeLayout, setJavLayout, showHomeSurfaces } from './layout.js';
+import { buildManageBar, cardLayout, homeLayoutActive, javActive, layoutState, setHomeLayout, setJavLayout, setPosterWidth, showHomeSurfaces } from './layout.js';
 import { selectionState, setSelectMode, toggleSelection } from './selection.js';
 import { javDisplayName, javTitleHtml } from '../core/jav-title';
 import { tagLabel } from '../core/tags';
@@ -19,7 +19,7 @@ import { currentBarsContext, entityState, openEntity, pushEntityPage, routeEntit
 import { applicationEffects } from './effects';
 import { managedEntry, managedTaken, openManagedRoute, releaseManagedRoute, updateManagedRoute } from './../history/managed';
 import { catalogFilterSkeletonHtml } from './../catalog-filter-skeleton';
-import { JAV_LAYOUTS, cardRatio, gridLayout, javLayout } from './../appearance/layout';
+import { JAV_LAYOUTS, cardRatio, gridLayout, javLayout, posterWidth } from './../appearance/layout';
 import { entityFaceImg, facePos, logoUrl } from './../card-art/markup';
 import { sidebarHasCatalogContent } from './../sidebar';
 import { rememberRepresentatives } from './../card-art/representatives';
@@ -233,6 +233,7 @@ export function catalogFilterActions(){
     },
     reshuffle:()=>refreshAll(),
     setLayout:value=>{if(javActive())setJavLayout(value);else setHomeLayout(value)},
+    setPosterWidth,
     /* 每排各记各的页号：两排的长度不一样，共用一个计数会让先到头的那排替另一排把页翻过去。
        页号跟着这一份名单走，`buildBars` 换名单时从头数起。两排翻到同一页时由 `fetchTopsPage` 共用一次请求。 */
     moreTops:async kind=>{
@@ -244,8 +245,8 @@ export function catalogFilterActions(){
 }
 
 export function catalogLayoutProp(){
-  if(javActive())return {name:'jav-layout',label:'JAV 卡片版式',value:javLayout(),options:JAV_LAYOUTS};
-  if(homeLayoutActive())return {name:'home-layout',label:'首页卡片版式',value:cardLayout(),options:JAV_LAYOUTS};
+  if(javActive())return {name:'jav-layout',label:'JAV 卡片版式',value:javLayout(),options:JAV_LAYOUTS,posterWidth:posterWidth()};
+  if(homeLayoutActive())return {name:'home-layout',label:'首页卡片版式',value:cardLayout(),options:JAV_LAYOUTS,posterWidth:posterWidth()};
   return null;
 }
 
