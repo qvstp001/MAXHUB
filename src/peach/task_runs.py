@@ -91,6 +91,7 @@ TASK_LABELS = {
     "link-prune": "失效链接清理",
     "resource-scan": "资源同步检查",
     "library-scan": "扫描媒体库",
+    "performer-scrape": "刮削女优资料",
     "resource-apply": "资源同步清理",
     "scraping-cover": "封面采集",
     "media-repair": "媒体修复",

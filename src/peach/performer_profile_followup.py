@@ -270,9 +270,9 @@ def _record_review(root: Path, entity_id: int, rows: list[dict]) -> None:
 # -- 执行 --------------------------------------------------------------------
 
 
-def run(contract, key: str, handle) -> dict:
+def run(contract, key: str, handle, *, fill_missing: bool = False) -> dict:
     """跑一条补女优资料后继，再按结论记下多久之后再派。"""
-    summary = _run(contract, key, handle)
+    summary = _run(contract, key, handle, fill_missing=fill_missing)
     with contract.database.read_connection() as connection:
         current = fingerprint(connection, parse_key(key))
     outcome = str(summary.get("outcome", ""))
@@ -288,7 +288,7 @@ def run(contract, key: str, handle) -> dict:
     return summary
 
 
-def _run(contract, key: str, handle) -> dict:
+def _run(contract, key: str, handle, *, fill_missing: bool = False) -> dict:
     entity_id = parse_key(key)
     batch = f"{SOURCE}@{getattr(handle, 'run_id', None) or time.strftime('%Y%m%dT%H%M%S')}"
     with contract.database.read_connection() as connection:
@@ -307,7 +307,8 @@ def _run(contract, key: str, handle) -> dict:
     reports: dict[str, str] = {}
     rows: list[dict] = []
     try:
-        _visit_minnano(contract, sites[MINNANO], entity_id, names, state, batch, base, reports, rows)
+        _visit_minnano(contract, sites[MINNANO], entity_id, names, state, batch, base, reports, rows,
+                       fill_missing=fill_missing)
         conflict_count = _visit_avwikidb(contract, sites[AVWIKIDB], entity_id, names, state, batch,
                                          base, reports, rows)
         _visit_javdb(contract, sites[JAVDB], entity_id, names, batch, base, reports, rows)
@@ -335,10 +336,10 @@ def _run(contract, key: str, handle) -> dict:
 
 
 def _visit_minnano(contract, pages, entity_id: int, names, state: dict, batch: str, base: dict,
-                   reports: dict, rows: list) -> None:
+                   reports: dict, rows: list, *, fill_missing: bool = False) -> None:
     """minnano-av：进她的资料页，核对名字，整行写 `performer_profile`。"""
     canonical, aliases = names
-    if _fresh(state["fetched"]):
+    if _fresh(state["fetched"]) and not fill_missing:
         reports[MINNANO] = "资料未过期"
         rows.append({**base, "site": MINNANO, "page": "", "action": FRESH,
                      "detail": "资料取回不到 30 天"})
@@ -371,7 +372,8 @@ def _visit_minnano(contract, pages, entity_id: int, names, state: dict, batch: s
         if not _alive(connection, entity_id, canonical):
             reports[MINNANO] = f"{MISS}：数据库里这条实体已经变了"
             return
-        wrote = write_profile(connection, entity_id, parsed, source=batch, source_url=url)
+        wrote = write_profile(connection, entity_id, parsed, source=batch, source_url=url,
+                              fill_missing=fill_missing)
         bound = ""
         if not refs:
             bound = bind(connection, entity_id, MINNANO, parsed["actress_id"],

@@ -27,12 +27,18 @@ def _stamp() -> str:
 
 
 def write_profile(connection: sqlite3.Connection, entity_id: int, profile: dict, *,
-                  source: str, source_url: str, fetched_at: str | None = None) -> bool:
+                  source: str, source_url: str, fetched_at: str | None = None,
+                  fill_missing: bool = False) -> bool:
     """写入或整行替换这位的资料；这一行是人写的就不动，返回 False。调用方负责事务。"""
     held = connection.execute(f"SELECT source FROM {TABLE} WHERE entity_id=?",
                               (int(entity_id),)).fetchone()
     if held is not None and not str(held[0]).startswith(AUTO_PREFIX):
         return False
+    if fill_missing and held is not None:
+        previous = read_profile(connection, entity_id) or {}
+        profile = {**profile, **{key: value for key, value in previous.items()
+                                if key in (*PROFILE_COLUMNS, 'tags', 'raw')
+                                and value not in (None, '', [], {})}}
     values = [profile.get(column) for column in PROFILE_COLUMNS]
     columns = ("entity_id", *PROFILE_COLUMNS, "tags_json", "raw_json", "source", "source_url",
                "fetched_at")

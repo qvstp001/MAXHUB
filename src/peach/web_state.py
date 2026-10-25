@@ -230,6 +230,7 @@ class WebContract:
         self.resource_scan = self._job(
             "PeachResourceScanJob", "resource-scan", id_key="scan_id")
         self.library_scan_job = self._job("PeachLibraryScanJob", "library-scan")
+        self.performer_scrape_job = self._job("PeachPerformerScrapeJob", "performer-scrape")
         self.link_check = self._job("PeachLinkCheckJob", "link-check", id_key="check_id")
         self._fts_available: bool | None = None
         self.database.after_commit = self.cache_bust
@@ -340,6 +341,7 @@ class WebContract:
         """
         self.resource_scan.stop()
         self.library_scan_job.stop()
+        self.performer_scrape_job.stop()
         self.follow_job.stop()
         self.scraping_cover_job.stop()
         self.library_processing_job.stop()

@@ -171,6 +171,7 @@ function Shell(given: EntityPageProps) {
 /** 走真实的首屏路径：先 prefetch 落进缓存，再挂载。 */
 async function open(plan: Plan = {}, patch: Partial<EntityPageProps> = {}) {
   const served = serve(plan);
+  queryClient.setQueryData(['performer-scrape'], { status: 'idle' });
   const props = shellProps(patch);
   await prefetchEntityPage(props);
   const requestsBeforeMount = served.fetcher.mock.calls.length;

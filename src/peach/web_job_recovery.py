@@ -8,6 +8,7 @@ from .web_feeds import w_feed_check
 from .web_wants import start_scrape
 from .web_links import w_links_check, w_links_prune
 from .web_resource_sync import w_library_scan, w_resource_sync_scan, w_resource_sync_apply
+from .web_performer_scrape import w_performer_scrape
 from .web_stats import w_taste_refresh
 from .web_media_repair import w_media_repair
 from .web_organize import w_organize_apply, w_organize_rollback
@@ -25,6 +26,7 @@ def restore(contract):
         "link-check": lambda body: w_links_check(contract, {**body, 'restart': True}),
         "resource-scan": lambda body: w_resource_sync_scan(contract, {**body, 'background': True}),
         "library-scan": lambda body: w_library_scan(contract, body),
+        "performer-scrape": lambda body: w_performer_scrape(contract, body),
         "resource-apply": lambda body: w_resource_sync_apply(contract, body),
         "link-prune": lambda body: w_links_prune(contract, body),
         "follow-resolve": lambda body: w_follow_resolve(contract, body),

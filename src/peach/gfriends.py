@@ -94,6 +94,29 @@ def load_index(cache_dir: Path) -> dict[str, list[tuple[str, str]]]:
         return {}
 
 
+def ensure_index(cache_dir: Path) -> bool:
+    """后台任务按日补齐图库索引；取页失败保留已有缓存，返回索引是否新鲜。"""
+    from .fsutil import atomic_write_bytes
+    from .http import HttpRequest, HttpxTransport
+    from httpx import HTTPError
+
+    age = index_age(cache_dir)
+    if age is not None and age <= INDEX_MAX_AGE_SECONDS and load_index(cache_dir):
+        return True
+    transport = HttpxTransport()
+    try:
+        response = transport(HttpRequest('GET', GFRIENDS_RAW + 'Filetree.json',
+                                         {'Accept': 'application/json'}), 60, 32 * 1024 * 1024)
+        if response.status != 200 or not parse_filetree(response.body):
+            return False
+        atomic_write_bytes(cache_dir / INDEX_NAME, response.body)
+        return True
+    except (OSError, ValueError, KeyError, TypeError, HTTPError):
+        return False
+    finally:
+        transport.close()
+
+
 @dataclass(frozen=True)
 class Match:
     """名字链在图库里的全部落点。

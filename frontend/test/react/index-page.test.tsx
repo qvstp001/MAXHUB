@@ -33,6 +33,7 @@ function seed<T>(key: readonly unknown[], items: T[], more = false, categories?:
 /** 按地址回话的假 fetch；`answer` 返回 `undefined` 时那一问一直挂着。 */
 function serve(answer: (url: string) => unknown) {
   const fetcher = vi.fn(async (url: string) => {
+    if (String(url) === '/api/performer-scrape') return { ok: true, status: 200, json: async () => ({ status: 'idle' }) };
     const body = await answer(url);
     return { ok: true, status: 200, json: async () => body };
   });
@@ -40,7 +41,8 @@ function serve(answer: (url: string) => unknown) {
   return fetcher;
 }
 
-const urls = (fetcher: ReturnType<typeof serve>) => fetcher.mock.calls.map(([url]) => String(url));
+const urls = (fetcher: ReturnType<typeof serve>) => fetcher.mock.calls.map(([url]) => String(url))
+  .filter(url => url !== '/api/performer-scrape');
 
 function props(route: Partial<IndexRoute> = {}, patch: Partial<IndexProps> = {}): IndexProps {
   return {

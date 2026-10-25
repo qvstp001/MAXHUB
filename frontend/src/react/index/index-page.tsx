@@ -22,6 +22,7 @@ import { IDENTITY_ROW_CLASS } from '../../identity-filter';
 import { BoardTabs, type BoardTab } from '../components/board-tabs';
 import { EmptyState } from '../components/empty-state';
 import { LibraryShortcuts } from '../library-shortcuts/shortcut-controls';
+import { PerformerScrapeControls } from '../performer-scrape/performer-scrape';
 import { LoadingDots } from '../components/loading-dots';
 import { SEGMENTED_TRACK, SEGMENT_ICON, SegmentedRadioGroup as RadioGroup } from '../components/segmented';
 import { spriteGlyph } from '../components/sprite-glyph';
@@ -248,6 +249,7 @@ export function IndexPage(props: IndexProps) {
         <span aria-hidden className="hidden h-0 basis-full max-board-narrow:order-2 max-board-narrow:block" />
         <IndexSearch label={`过滤${title}`} value={q} onQuery={(next) => { if (next !== q) go({ q: next }, !!next) }} />
       </div>
+      {kind === 'performers' && scope === 'local' ? <div className="mb-5"><PerformerScrapeControls /></div> : null}
       {kind === 'performers' || kind === 'creators' ? (
         <BoardTabs tabs={PEOPLE_TABS} value={onlineAuthors ? 'online' : kind} label="人物名册"
           onChange={(next) => {

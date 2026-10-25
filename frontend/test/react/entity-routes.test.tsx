@@ -27,9 +27,11 @@ beforeAll(async () => { await import('../../src/react/router/router') }, REACT_I
 async function load(path = '/') {
   vi.resetModules();
   window.history.replaceState(null, '', path);
-  const [history, router, routes] = await Promise.all([
+  const [history, router, routes, query] = await Promise.all([
     import('../../src/history'), import('../../src/react/router/router'), import('../../src/react/router/managed-routes'),
+    import('../../src/react/query'),
   ]);
+  query.queryClient.setQueryData(['performer-scrape'], { status: 'idle' });
   return { ...history, ...router, ...routes };
 }
 type Loaded = Awaited<ReturnType<typeof load>>;
@@ -87,6 +89,7 @@ function entityFetch({ deferred = false } = {}) {
       return Promise.resolve(reply({ total: 0, sample_total: 0, sets: [], has_more: false, seed: '', items: [] }));
     }
     if (url.pathname === '/api/feeds/discoveries') return Promise.resolve(reply({ items: [] }));
+    if (url.pathname === '/api/performer-scrape') return Promise.resolve(reply({ status: 'idle' }));
     return Promise.resolve(reply({ status: 'idle' }));
   });
   vi.stubGlobal('fetch', fetched);

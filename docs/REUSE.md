@@ -734,3 +734,7 @@ Python 复用 MIT 许可的 [Ruff](https://docs.astral.sh/ruff/) 0.17.0，版本
 站点强调色检查覆盖进度、焦点、选中态、操作按钮与流光：旧 `--feedback-success` 引用既有强调色色阶；RSS 订阅保留橙色，信息、成功、警告、错误、品牌与图表分类保留语义色。
 
 普通 Toast 与扫描任务卡共用 Agent Progress 外框，16px 半径由通知栈内的既有 token 解析，细边框与接触阴影分别复用 `border-button-default`、`elevation-xs`，不改变内容排版。浏览器回归核对桌面、手机和明暗主题下的外框一致性，并以同一任务、同一内容回放外框基线生成对比图。
+
+## 独立女优资料补全
+
+`web_performer_scrape` 复用 `performer_profile_followup` 的来源缓存、限流与身份核验，复用 `avatar_followup` 和 `avatar_picker` 的头像保护与人像匹配。档案的 `fill_missing` 写入仅填空字段；人工档案整行保留。`gfriends.ensure_index` 提供有界索引刷新并保留旧缓存。任务使用 `BackgroundJob`、SQLite backup、`DiskGuard` 和统一任务恢复，前端使用 `useBackgroundJob`、确认弹窗与共享进度组件，无新增依赖。

@@ -92,6 +92,7 @@ from .web_orphan_records import q_orphan_records, w_orphan_attach
 from .web_playlists import q_playlist, q_playlists, w_playlist
 from .web_custom_metadata import q_custom_metadata, w_custom_metadata
 from .web_resource_sync import w_library_scan, w_purge_missing, w_resource_sync_apply, w_resource_sync_scan
+from .web_performer_scrape import q_performer_scrape, w_performer_scrape
 from .web_review import q_review, w_review_decision, w_review_genre
 from .web_settings import q_settings, w_settings
 from .web_library_shortcuts import q_library_shortcuts, w_library_shortcuts
@@ -352,6 +353,7 @@ GET_HANDLERS = {
     "/api/links/prune": lambda contract, args: contract.link_prune_job.snapshot() or {"status": "idle"},
     "/api/resource-sync/apply": lambda contract, args: contract.resource_apply_job.snapshot() or {"status": "idle"},
     "/api/library-scan": lambda contract, args: contract.library_scan_job.snapshot() or {"status": "idle"},
+    "/api/performer-scrape": q_performer_scrape,
     "/api/media-repair": q_media_repair,
     "/api/orphan-records": q_orphan_records,
     "/api/organize": q_organize,
@@ -438,6 +440,7 @@ POST_HANDLERS = {
     "/api/links/prune": w_links_prune,
     "/api/resource-sync/scan": w_resource_sync_scan,
     "/api/library-scan": w_library_scan,
+    "/api/performer-scrape": w_performer_scrape,
     "/api/resource-sync/apply": w_resource_sync_apply,
     "/api/media-repair": w_media_repair,
     "/api/review/decision": w_review_decision,

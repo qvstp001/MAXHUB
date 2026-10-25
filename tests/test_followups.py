@@ -1358,9 +1358,6 @@ class ProcessLibraryTests(LedgerTestCase):
         media = self.root / 'media'
         media.mkdir()
         (media / 'ABW-358.mp4').write_bytes(b'video')
-        (media / 'ABW-358.nfo').write_text(
-            '<movie><title>作品</title><sorttitle>ABW-358</sorttitle></movie>',
-            encoding='utf-8')
         return media, PeachConfig(self.root, self.root / 'config.toml', present=True,
                                   locations={'local': (str(media),)})
 
