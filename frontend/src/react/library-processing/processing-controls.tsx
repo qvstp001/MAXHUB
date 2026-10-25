@@ -38,6 +38,9 @@ export function ProcessingControls({ state, disabled = false }: {
         onClick={() => {
           if (state.job_id) change({ action: state.status === 'paused' ? 'resume' : 'pause', job_id: state.job_id });
         }} /> : null}
+      {['complete', 'failed'].includes(state.status) && state.job_id ? <Button size="small" variant="secondary"
+        disabled={disabled} {...busyProps(action.busy === 'dismiss')}
+        onClick={() => change({ action: 'dismiss', job_id: state.job_id! })}>清除结果</Button> : null}
     </div>
     {action.error ? <p role="alert" className="text-caption-1-regular text-text-error-primary">{action.error}</p> : null}
   </div>;

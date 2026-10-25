@@ -36,6 +36,7 @@ export function useLibraryProcessingJob(
     if (!state) return;
     const was = previous.current;
     previous.current = state.status;
+    if (state.status === 'idle') setSettled(null);
     const witnessed = !!was && ['running', 'pausing', 'paused'].includes(was) && !processingActive(state);
     if (witnessed) setSettled(state);
     /* 任务面还要认「刚结束」：首次引导那一趟常在跳到目录页之前就跑完，它从没见过

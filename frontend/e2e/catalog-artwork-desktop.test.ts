@@ -28,11 +28,24 @@ it('桌面首页横幅、海报尺寸和排序可以切换并保存', async () =
       })), total: 20, has_more: false } });
     });
     for (const endpoint of ['backdrop', 'cover', 'poster']) await page.route(`**/${endpoint}?*`, route => route.fulfill({
-      contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="${endpoint === 'backdrop' ? 'navy' : 'tan'}"/></svg>`,
+      contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="539"><rect width="800" height="539" fill="${endpoint === 'backdrop' ? 'navy' : 'tan'}"/></svg>`,
     }));
     await page.goto(requiredEnv('PEACH_E2E_ORIGIN') + '/', { waitUntil: 'load' });
     const picture = page.locator('#grid [data-media-card] [data-media-pic]').first();
     await picture.locator('img[data-backdrop-image]').waitFor();
+    await picture.locator('img').evaluate((node: HTMLImageElement) => node.decode());
+    assert.equal(await picture.locator('img').evaluate(node => getComputedStyle(node).objectFit), 'cover');
+    const pixels = await page.evaluate(async encoded => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${encoded}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      return [4, img.width - 5].map(x => Array.from(ctx.getImageData(x, Math.floor(img.height / 2), 1, 1).data));
+    }, (await picture.screenshot()).toString('base64'));
+    for (const pixel of pixels) assert.ok(pixel[2]! > 80, JSON.stringify(pixels));
     const ratio = await picture.evaluate(node => node.clientWidth / node.clientHeight);
     assert.ok(Math.abs(ratio - 16 / 9) < .02, String(ratio));
     const bannerSlider = page.getByRole('slider', { name: '横幅尺寸', exact: true });

@@ -17,6 +17,55 @@ from support.ledger import fresh_ledger
 
 
 class ProcessingControlTests(unittest.TestCase):
+    def test_finished_result_can_be_dismissed_without_changing_media_ledger_or_logs(self):
+        from peach.jobs import BackgroundJob
+        from peach.library_processing import _save, state_path, issues_path
+        from peach.web_library_processing import q_library_processing
+        self.seed(1)
+        media = self.root / 'retired-folder.strm'
+        media.write_text('https://media.example/movie.mp4')
+        ledger = self.db.read_bytes()
+        state = dict(status='failed', job_id='old', issue_count=16, retryable_asset_ids=[1], error='媒体文件不可访问')
+        _save(state_path(self.config), state)
+        log = issues_path(self.config, 'old')
+        log.write_text('original diagnostics\n')
+        job_recovery.save(self.db, 'library-processing', 'old', {})
+        job_recovery.finish(self.db, 'library-processing', 'old', 'blocked')
+        contract = SimpleNamespace(db_path=self.db, library_processing_job=BackgroundJob('library-processing'))
+        with patch('peach.web_library_processing.settings_file.active', return_value=self.config):
+            result = w_library_processing(contract, {'action': 'dismiss', 'job_id': 'old'})
+            self.assertEqual(result['status'], 'idle')
+            self.assertEqual(q_library_processing(contract, {})['status'], 'idle')
+            self.assertEqual(w_library_processing(contract, {'action': 'dismiss', 'job_id': 'old'}), result)
+        self.assertEqual(job_recovery.read(self.db, 'library-processing')['status'], 'dismissed')
+        archive, = self.config.directory('state').glob('*.dismissed.json')
+        self.assertEqual(json.loads(archive.read_text(encoding='utf-8')), state)
+        self.assertEqual(log.read_text(), 'original diagnostics\n')
+        self.assertEqual(self.db.read_bytes(), ledger)
+        self.assertTrue(media.exists())
+
+    def test_dismiss_requires_the_current_terminal_job_and_no_writer(self):
+        from filelock import FileLock
+        from peach.jobs import BackgroundJob
+        from peach.library_processing import _save, state_path
+        job = BackgroundJob('library-processing')
+        contract = SimpleNamespace(db_path=self.db, library_processing_job=job)
+        path = state_path(self.config)
+        with patch('peach.web_library_processing.settings_file.active', return_value=self.config):
+            for status in ('running', 'pausing', 'paused'):
+                job.state = dict(job_id='current', status=status)
+                _save(path, job.state)
+                with self.subTest(status=status), self.assertRaisesRegex(ValueError, '不能清除'):
+                    w_library_processing(contract, {'action': 'dismiss', 'job_id': 'current'})
+            job.state = None
+            _save(path, dict(job_id='current', status='failed'))
+            with self.assertRaisesRegex(ValueError, '任务已变化'):
+                w_library_processing(contract, {'action': 'dismiss', 'job_id': 'old'})
+            before = path.read_bytes()
+            with FileLock(str(path) + '.lock'), self.assertRaisesRegex(ValueError, '不能清除'):
+                w_library_processing(contract, {'action': 'dismiss', 'job_id': 'current'})
+            self.assertEqual(path.read_bytes(), before)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

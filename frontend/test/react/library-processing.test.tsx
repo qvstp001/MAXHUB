@@ -75,6 +75,27 @@ const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync
 const menuItem = (label: string) =>
   [...document.querySelectorAll('[role="dialog"] button')].find((item) => item.textContent?.trim() === label);
 
+it('清除已结束任务结果同步移除卡片错误与常驻通知，刷新读取为空闲', async () => {
+  let state: LibraryProcessingData = { job_id: 'old', status: 'failed', issue_count: 16,
+    retryable_asset_ids: [1], error: '16 项需要处理，可重试未完成的部分。' };
+  const remote = await open(state, (method, body) => {
+    if (method === 'POST') {
+      expect(body).toEqual({ action: 'dismiss', job_id: 'old' });
+      state = { status: 'idle' };
+    }
+    return state;
+  });
+  const props = { toast: vi.fn() };
+  const host = await mount(<>{card(props)}{notice({ ...props, mode: 'notice' })}</>);
+  expect(host.querySelector('[data-processing-dock]')).not.toBeNull();
+  await click(buttonNamed('清除结果', host));
+  expect(remote.posts()).toEqual([{ action: 'dismiss', job_id: 'old' }]);
+  expect(host.textContent).not.toContain('16 项需要处理');
+  expect(host.querySelector('[data-processing-dock]')).toBeNull();
+  await prefetchLibraryProcessing(new AbortController().signal);
+  expect(queryClient.getQueryData(LIBRARY_PROCESSING_KEY)).toMatchObject({ status: 'idle' });
+});
+
 it('来源说没有只报一个数，不算问题也不提供失败重试', async () => {
   await open({
     status: 'complete',

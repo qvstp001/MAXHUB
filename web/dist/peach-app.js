@@ -45428,31 +45428,45 @@ function RP({ state: e, disabled: t = !1 }) {
 		"data-processing-controls": "",
 		children: [/* @__PURE__ */ (0, C.jsxs)("div", {
 			className: "flex flex-wrap items-center gap-2",
-			children: [/* @__PURE__ */ (0, C.jsx)(tCe, {
-				value: e.speed_mode || "standard",
-				busy: t || !!n.busy,
-				animate: e.status !== "paused" && e.status !== "pausing",
-				onChange: (t) => a({
-					action: "set_speed",
-					speed_mode: t,
-					...r ? { job_id: e.job_id } : {}
-				})
-			}), r ? /* @__PURE__ */ (0, C.jsx)(q, {
-				size: "small",
-				variant: "secondary",
-				iconOnly: !0,
-				leadingIcon: e.status === "paused" ? Rk : Qge,
-				"aria-label": i,
-				title: i,
-				disabled: t || !e.job_id || e.status === "pausing",
-				...Y(n.busy === "pause" || n.busy === "resume"),
-				onClick: () => {
-					e.job_id && a({
-						action: e.status === "paused" ? "resume" : "pause",
+			children: [
+				/* @__PURE__ */ (0, C.jsx)(tCe, {
+					value: e.speed_mode || "standard",
+					busy: t || !!n.busy,
+					animate: e.status !== "paused" && e.status !== "pausing",
+					onChange: (t) => a({
+						action: "set_speed",
+						speed_mode: t,
+						...r ? { job_id: e.job_id } : {}
+					})
+				}),
+				r ? /* @__PURE__ */ (0, C.jsx)(q, {
+					size: "small",
+					variant: "secondary",
+					iconOnly: !0,
+					leadingIcon: e.status === "paused" ? Rk : Qge,
+					"aria-label": i,
+					title: i,
+					disabled: t || !e.job_id || e.status === "pausing",
+					...Y(n.busy === "pause" || n.busy === "resume"),
+					onClick: () => {
+						e.job_id && a({
+							action: e.status === "paused" ? "resume" : "pause",
+							job_id: e.job_id
+						});
+					}
+				}) : null,
+				["complete", "failed"].includes(e.status) && e.job_id ? /* @__PURE__ */ (0, C.jsx)(q, {
+					size: "small",
+					variant: "secondary",
+					disabled: t,
+					...Y(n.busy === "dismiss"),
+					onClick: () => a({
+						action: "dismiss",
 						job_id: e.job_id
-					});
-				}
-			}) : null]
+					}),
+					children: "清除结果"
+				}) : null
+			]
 		}), n.error ? /* @__PURE__ */ (0, C.jsx)("p", {
 			role: "alert",
 			className: "text-caption-1-regular text-text-error-primary",
@@ -45471,7 +45485,7 @@ function zP({ toast: e, mode: t, monitor: n }) {
 	return (0, S.useEffect)(() => {
 		if (!c) return;
 		let n = s.current;
-		s.current = c.status;
+		s.current = c.status, c.status === "idle" && o(null);
 		let r = !!n && [
 			"running",
 			"pausing",
@@ -45694,7 +45708,7 @@ function WP({ state: e, problem: t = "", measure: n = !1 }) {
 			}) : null,
 			/* @__PURE__ */ (0, C.jsxs)("div", {
 				className: "flex flex-wrap items-center justify-between gap-2",
-				children: [s ? /* @__PURE__ */ (0, C.jsx)(RP, {
+				children: [s || o ? /* @__PURE__ */ (0, C.jsx)(RP, {
 					state: e,
 					disabled: !!t
 				}) : null, /* @__PURE__ */ (0, C.jsx)(HA, {

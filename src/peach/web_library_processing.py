@@ -1,13 +1,48 @@
 """统一处理任务的启动、只读状态查询与失败项重试。"""
+import hashlib
 import json
+import time
+
+from filelock import FileLock, Timeout
 
 from . import settings_file
 from .library_processing import (ALL_STAGES, COLLECT_STAGE, SCAN_STAGE, STAGES,
                                 METADATA_STAGE, PREVIEWS_STAGE, _asset_selection,
-                                decorate, issues_path, process_library, snapshot)
+                                decorate, issues_path, process_library, snapshot, state_path)
+from .fsutil import atomic_write_text
 from .processing_control import control_for, initial_estimate, valid_mode, mode_ratio
 
 ACTIVE = ('running', 'pausing', 'paused')
+
+
+def _dismiss_finished(contract, config, body):
+    """归档已结束的任务结果；不改馆藏、历史任务或诊断日志。"""
+    job_id = str(body.get('job_id') or '')
+    if not job_id:
+        raise ValueError('请选择要清除结果的任务')
+    job = contract.library_processing_job
+    try:
+        with job.lock, FileLock(str(state_path(config)) + '.lock', timeout=0):
+            if job.state and job.state.get('status') in ACTIVE:
+                raise ValueError('任务仍在处理或暂停中，不能清除结果')
+            previous = snapshot(config)
+            if previous.get('status') == 'idle' and previous.get('dismissed_job_id') == job_id:
+                result = previous
+            else:
+                if job_id != str(previous.get('job_id') or ''):
+                    raise ValueError('任务已变化，请刷新页面后重试')
+                if previous.get('status') not in ('complete', 'failed'):
+                    raise ValueError('只能清除已结束任务的结果')
+                identity = hashlib.sha256(job_id.encode()).hexdigest()[:24]
+                archive = state_path(config).with_name(f'library-processing-{identity}.dismissed.json')
+                atomic_write_text(archive, json.dumps(previous, ensure_ascii=False), mode=0o600)
+                result = dict(status='idle', dismissed_job_id=job_id, dismissed_at=time.time())
+                atomic_write_text(state_path(config), json.dumps(result, ensure_ascii=False), mode=0o600)
+    except Timeout:
+        raise ValueError('任务仍在处理，不能清除结果') from None
+    from .job_recovery import finish
+    finish(contract.db_path, 'library-processing', job_id, 'dismissed')
+    return result
 
 
 def _current(contract):
@@ -37,6 +72,8 @@ def q_library_processing(contract, _args):
 
 def _control_action(contract, config, body):
     action = body['action']
+    if action == 'dismiss':
+        return _dismiss_finished(contract, config, body)
     if action not in ('pause', 'resume', 'set_speed'):
         raise ValueError('处理动作无效')
     previous = _current(contract)

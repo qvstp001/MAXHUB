@@ -80,7 +80,7 @@ export interface LibraryProcessingCommand {
   speed_mode?: ProcessingSpeed;
 }
 export type ProcessingControlCommand =
-  | { action: 'pause' | 'resume'; job_id: string }
+  | { action: 'pause' | 'resume' | 'dismiss'; job_id: string }
   | { action: 'set_speed'; speed_mode: ProcessingSpeed; job_id?: string };
 
 /** 暂停中的任务仍占用同一份处理范围，可继续并持续读取状态。 */
