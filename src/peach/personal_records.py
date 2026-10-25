@@ -8,6 +8,8 @@
 
 `disposal` 只有三个值：`NULL` 在库，`trash` 用户丢进回收站，`vanished` 文件已不在盘上但
 带着个人记录。判「在库」一律写 `disposal IS NULL`。
+
+媒体库索引扫描也用「已消失」保留缺失影片，允许同路径文件恢复后接回资料。
 """
 from __future__ import annotations
 

@@ -56,7 +56,7 @@ export function createEntityController(ports: EntityControllerPorts, helpers: En
     if (cached) return cached;
     const live = () => {
       const context = ports.context();
-      return context?.kind === kind && context.name === name ? context.filters : emptyEntityFilters();
+      return context?.kind === kind && context.name === name ? context.filters : emptyEntityFilters(kind);
     };
     const value: EntityPageActions = {
       ...delegated,

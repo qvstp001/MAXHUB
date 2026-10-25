@@ -1,11 +1,17 @@
 /* 首页筛选条岛：空馆藏与首屏等待时两排、标签条摆什么。
  *
  * 点选、续页、排序、版式与详情往返要真的取数和量布局，由 `frontend/e2e/catalog-filter.test.ts` 在真浏览器里走。 */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClientProvider } from '@tanstack/react-query';
 
-import { CatalogFilterPage } from '../../src/react/catalog-filter/catalog-filter-page';
+import { CatalogFilterPage as FilterPage } from '../../src/react/catalog-filter/catalog-filter-page';
+import { queryClient } from '../../src/react/query';
 import { EMPTY_SLOTS, type CatalogFilterProps, type TierPerformer } from '../../src/react/catalog-filter/catalog-filter';
 import { mount, mountRoot, pending, settle } from './render';
+
+beforeEach(() => { vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ status: 'idle' }) }))) });
+afterEach(() => queryClient.clear());
+const CatalogFilterPage = (props: CatalogFilterProps) => <QueryClientProvider client={queryClient}><FilterPage {...props} /></QueryClientProvider>;
 
 function props(patch: Partial<CatalogFilterProps> = {}): CatalogFilterProps {
   return {

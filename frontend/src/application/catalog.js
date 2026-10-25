@@ -234,6 +234,8 @@ export function catalogFilterActions(){
     reshuffle:()=>refreshAll(),
     setLayout:value=>{if(javActive())setJavLayout(value);else setHomeLayout(value)},
     setCardWidth,
+    receipt:message=>receiptsState.actionReceipt(message),
+    scanComplete:()=>{dropBars();void buildBars()},
     /* 每排各记各的页号：两排的长度不一样，共用一个计数会让先到头的那排替另一排把页翻过去。
        页号跟着这一份名单走，`buildBars` 换名单时从头数起。两排翻到同一页时由 `fetchTopsPage` 共用一次请求。 */
     moreTops:async kind=>{

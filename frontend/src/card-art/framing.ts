@@ -122,7 +122,8 @@ export function posterPanel(img: HTMLImageElement, ratio: number): void {
   const sourceAspect = imgW / imgH;
   const widePanel = sourceAspect >= WIDE_SLEEVE_RATIO_MIN && sourceAspect < WIDE_SLEEVE_RATIO_MAX
     && Math.abs(panelAspect - WIDE_PANEL_ASPECT) <= .02;
-  const frame = panelFrame({ x0, y0, x1, y1, px: [imgW, imgH] }, ratio, wideSleeve(img) || widePanel);
+  const fill = !!img.closest('[data-media-card][data-media-layout="big"]');
+  const frame = panelFrame({ x0, y0, x1, y1, px: [imgW, imgH] }, ratio, fill ? 'cover' : wideSleeve(img) || widePanel);
   if (!frame) return;
   img.style.setProperty('--panel-aspect', `${img.naturalWidth} / ${img.naturalHeight}`);
   img.classList.add('panel');

@@ -53,8 +53,8 @@ export interface PosterBox {
  *
  *  横向：框占卡片宽的 `框宽 / 框高 / 容器比例`。装得下就居中，两侧各留一条交给模糊
  *  背景；装不下就让框的右缘贴住卡片右缘再从左边切，因为标题、女优名和角标都压在
- *  正封右侧。 */
-export function panelFrame(box: Partial<PosterBox> | null | undefined, ratio: number, contain = false): {
+ *  正封右侧。`cover` 模式按较大的缩放比例居中铺满卡框。 */
+export function panelFrame(box: Partial<PosterBox> | null | undefined, ratio: number, contain: boolean | 'cover' = false): {
   clip: { top: number; right: number; bottom: number; left: number };
   left: number; top: number; height: number;
 } | null {
@@ -75,7 +75,7 @@ export function panelFrame(box: Partial<PosterBox> | null | undefined, ratio: nu
   if (!(boxWidth > 0 && boxHeight > 0)) return null;
   const visible = boxWidth / boxHeight / ratio;
   if (!(visible > 0)) return null;
-  const scale = contain ? Math.min(1, 1 / visible) : 1;
+  const scale = contain === 'cover' ? Math.max(1, 1 / visible) : contain ? Math.min(1, 1 / visible) : 1;
   const offset = contain ? (1 - visible * scale) / 2 - left0 / boxHeight / ratio * scale : visible <= 1
     ? (1 - visible) / 2 - left0 / boxHeight / ratio
     : 1 - right / boxHeight / ratio;

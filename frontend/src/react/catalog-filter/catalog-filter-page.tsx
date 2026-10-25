@@ -14,6 +14,7 @@ import { fitSkeleton, popBadges, popCount } from '@peach/legacy/ui';
 import { FilterGlassRows, FilterPill } from '../components/filter-glass';
 import { useViewGlide } from '../components/use-view-glide';
 import { LibraryShortcuts } from '../library-shortcuts/shortcut-controls';
+import { LibraryScanButton } from '../library-processing/library-scan';
 import { FolderBrowseToggle } from '../catalog-folders/catalog-folders-page';
 import { useCatalogView } from '../catalog-grid/catalog-view';
 import { CatalogViewToggle } from '../catalog-grid/catalog-view-toggle';
@@ -207,7 +208,8 @@ function Head({ count, refreshing, layout, sorts, actions }: CatalogFilterProps)
   };
   return (
     <>
-      <span data-catalog-summary=""><Readout count={count} /><LibraryShortcuts currentHref={actions.currentHref} /></span>
+      <div data-catalog-summary=""><Readout count={count} /><LibraryShortcuts currentHref={actions.currentHref} />
+        <LibraryScanButton receipt={actions.receipt} onComplete={actions.scanComplete} /></div>
       <span data-entity-sorts="">
         <Shuffle onPress={shuffle} busy={shuffling || refreshing} />
         {/* 按名字换键：JAV 与首页各一组，React Aria 的单选组挂上之后不改 `name`。 */}

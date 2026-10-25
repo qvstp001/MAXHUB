@@ -229,6 +229,7 @@ class WebContract:
         # 任务 id 的键名沿用各自原有的名字：它随公开投影下发，是前端契约。
         self.resource_scan = self._job(
             "PeachResourceScanJob", "resource-scan", id_key="scan_id")
+        self.library_scan_job = self._job("PeachLibraryScanJob", "library-scan")
         self.link_check = self._job("PeachLinkCheckJob", "link-check", id_key="check_id")
         self._fts_available: bool | None = None
         self.database.after_commit = self.cache_bust
@@ -338,6 +339,7 @@ class WebContract:
         谁在跑归契约自己知道，`api` 的 lifespan 不该再列一遍任务清单。
         """
         self.resource_scan.stop()
+        self.library_scan_job.stop()
         self.follow_job.stop()
         self.scraping_cover_job.stop()
         self.library_processing_job.stop()

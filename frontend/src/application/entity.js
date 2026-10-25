@@ -189,7 +189,7 @@ export function openEntity(kind,name){openRoutedPage(entityState.application.fre
 export function installEntity9() {
 entityState.ENTITY_FILTER_KEYS = ['loc','creator','tag','state','dur_min','dur_max','orient','sort','dir'];
 entityState.emptyEntityFilters = emptyEntityFilters;
-entityState.parseEntityFilters = search=>parseEntityFilters(search,{sort:preferencesState.appSettings.defaultSort,dir:preferencesState.appSettings.defaultSortDirection});
+entityState.parseEntityFilters = (search,kind)=>parseEntityFilters(search,{sort:preferencesState.appSettings.defaultSort,dir:preferencesState.appSettings.defaultSortDirection},kind);
 entityState.entityFilterSearch = entityFilterSearch;
 entityState.cloneBarsContext = context=>context&&context.type==='entity'
   ? {...context,filters:{...context.filters}}:context;

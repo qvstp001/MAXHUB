@@ -126,7 +126,7 @@ compositionState.shellActions = {
     props:(kind,name,search)=>entityState.application.addressProps(kind,name,search),
     /* 后退前进落在同一位的另一份筛选上：这一页还画着就只把地址上的新筛选推过去。 */
     refresh:(kind,name,search)=>{
-      const filters=entityState.parseEntityFilters(search);if(kind==='creator')filters.creator='';
+      const filters=entityState.parseEntityFilters(search,kind);if(kind==='creator')filters.creator='';
       const shown=currentBarsContext();
       if(shown.type!=='entity'||shown.kind!==kind||shown.name!==name)return false;
       if(!routeEntityPage(kind,name,filters,entityState.parseMediaView(search),{push:false}))return false;

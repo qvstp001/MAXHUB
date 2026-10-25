@@ -13,6 +13,7 @@ import { spriteGlyph, type Glyph } from '../components/sprite-glyph';
 import { PLAIN_STAT_STRIP, PlainStat, plainStatClass } from '../components/stat-card';
 import { DUPLICATES_KEY, fetchDuplicates } from '../duplicates/duplicates';
 import { LibraryProcessingCard } from '../library-processing/library-processing-card';
+import { LibraryScanButton } from '../library-processing/library-scan';
 import { MediaRepairCard } from '../media-repair/media-repair-card';
 import { fetchMediaSources, MEDIA_SOURCES_KEY } from '../media-sources';
 import { fetchQualityGoals, QUALITY_GOALS_KEY } from '../quality-goals/quality-goals';
@@ -95,6 +96,7 @@ export function DataCleanupPage({ toast, failure, open }: DataCleanupProps) {
           }))} />
       </div>
       <div className="flex flex-col gap-4 max-cleanup-tight:gap-3">
+        <LibraryScanButton receipt={notify} />
         {/* 卡片和它的提示是两件东西，提示挂在卡片外面：`#libraryProcessing` 是这一格本身，
             地址栏带着它进来时滚到这里。 */}
         <div id="libraryProcessing" className="scroll-mt-20">

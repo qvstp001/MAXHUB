@@ -53,6 +53,7 @@ class ResourceSyncContract(Protocol):
     resource_cleanup_enabled: bool
     resource_scan: BackgroundJob
     resource_apply_job: BackgroundJob
+    library_scan_job: BackgroundJob
 
     def cache_bust(self) -> None: ...
     def read_connection(self): ...
@@ -79,6 +80,75 @@ def configured_resource_locations() -> tuple[str, ...]:
     """核对已声明的媒体来源，离线状态由扫描阶段报告。"""
     return tuple(location for location, roots in LOCATION_ROOT_DECLARATIONS.items()
                  if location in SCANNABLE_LOCATIONS and roots)
+
+
+def w_library_scan(contract: ResourceSyncContract, body):
+    """核对媒体库索引，保留缺失影片的资料与个人记录。"""
+    if body.get("confirmed") is not True:
+        raise ValueError("扫描媒体库需要确认")
+    return contract.library_scan_job.start_result(
+        lambda: _reconcile_library(contract), recovery={"confirmed": True})
+
+
+def _reconcile_library(contract: ResourceSyncContract) -> dict:
+    sources = []
+    hidden = restored = checked = 0
+    job_id = (contract.library_scan_job.snapshot() or {}).get("job_id", "")
+    for location in configured_resource_locations():
+        if not contract.library_scan_job.checkpoint(job_id):
+            raise InterruptedError("媒体库扫描已停止")
+        source = {"location": location, "online": source_is_online(location),
+                  "checked": 0, "hidden": 0, "restored": 0, "unreadable": 0}
+        sources.append(source)
+        if not source["online"]:
+            continue
+        roots = _source_roots(location)
+        with contract.read_connection() as connection:
+            rows = connection.execute(
+                "SELECT id,path,disposal FROM asset WHERE location=? AND medium='video' "
+                "AND path IS NOT NULL AND (disposal IS NULL OR disposal=?) ORDER BY id",
+                (location, VANISHED)).fetchall()
+        rows = [row for row in rows if any(
+            within_root(translate_ledger_path(row["path"]), root) for root in roots)]
+        missing, unreadable = _missing_resource_ids(rows)
+        missing_ids = set(missing)
+        gone = {int(row["id"]) for row in _confirm_vanished(
+            [row for row in rows if int(row["id"]) in missing_ids])}
+        returned = set()
+        for row in rows:
+            if row["disposal"] != VANISHED:
+                continue
+            try:
+                if translate_ledger_path(row["path"]).is_file():
+                    returned.add(int(row["id"]))
+            except OSError:
+                pass
+        source.update(checked=len(rows), unreadable=unreadable)
+        # 核对中掉线的来源整批保留。提交只匹配核对时的路径与状态。
+        if not source_is_online(location):
+            source["online"] = False
+            continue
+        stamp = time.time()
+        with contract.write_transaction() as connection:
+            for row in rows:
+                asset_id = int(row["id"])
+                if asset_id in gone and row["disposal"] is None:
+                    source["hidden"] += connection.execute(
+                        "UPDATE asset SET disposal=?,feedback_at=? "
+                        "WHERE id=? AND path=? AND disposal IS NULL",
+                        (VANISHED, stamp, asset_id, row["path"])).rowcount
+                elif asset_id in returned:
+                    source["restored"] += connection.execute(
+                        "UPDATE asset SET disposal=NULL,feedback_at=NULL "
+                        "WHERE id=? AND path=? AND disposal=?",
+                        (asset_id, row["path"], VANISHED)).rowcount
+        hidden += source["hidden"]
+        restored += source["restored"]
+        checked += source["checked"]
+        contract.library_scan_job.update(job_id, sources=sources, checked=checked,
+                                         hidden=hidden, restored=restored)
+    return {"ok": True, "sources": sources, "checked": checked,
+            "hidden": hidden, "restored": restored}
 
 
 def _scan_resource_directory(
@@ -195,7 +265,10 @@ def _confirm_vanished(rows: Sequence) -> list:
 
     def present(row) -> bool:
         try:
-            return translate_ledger_path(row["path"]).exists()
+            translate_ledger_path(row["path"]).stat()
+            return True
+        except FileNotFoundError:
+            return False
         except OSError:
             # 读不出来不等于不存在；答不上来的一律留着。
             return True

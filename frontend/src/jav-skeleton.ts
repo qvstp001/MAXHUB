@@ -48,7 +48,7 @@ function javFilterSkeleton(): string {
     <div data-filter-row="bottom" aria-busy="true" class="flex min-h-12 min-w-0 items-center gap-3 px-3 py-2">
       <span data-catalog-readout><span data-skeleton="count" class="relative inline-block h-3.5 w-37.5 rounded-md align-middle skeleton-sheen"></span></span>
       ${islandShortcutsEntry()}
-      <span data-entity-sorts><button type="button" data-entity-batch data-filter-action data-skeleton-action data-jav-metadata-update title="更新资料" aria-label="更新资料" disabled>${islandGlyph('refresh-cw', 'size-4')}</button><span data-entity-layout class="inline-flex w-max max-w-full flex-none items-center gap-0.5 rounded-lg">${size('big', 'maximize')}${size('small', 'layout-grid')}</span>
+      <span data-entity-sorts><button type="button" data-entity-batch data-filter-action data-skeleton-action data-jav-metadata-update title="更新资料" aria-label="更新资料" disabled>${islandGlyph('refresh-cw', 'size-4')}</button><span data-entity-layout class="inline-flex w-max max-w-full flex-none items-center gap-0.5 rounded-lg">${size('big', 'rectangle-vertical')}${size('small', 'rectangle-horizontal')}</span>
         ${DISCOVERY_SORTS.map(([key, label]) => `<button type="button" data-entity-sort="${key}" data-entity-press aria-pressed="${key === 'taste'}">${label}${key === 'taste' ? islandGlyph('arrow-down', 'size-3.5') : ''}</button>`).join('')}
       </span>
     </div>

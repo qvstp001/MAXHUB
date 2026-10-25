@@ -711,6 +711,8 @@ Python 复用 MIT 许可的 [Ruff](https://docs.astral.sh/ruff/) 0.17.0，版本
 
 ## 馆藏处理控制与耗时预估
 
+媒体库索引扫描复用 `web_resource_sync` 的来源在线闸门、按目录枚举和逐文件 `stat` 复核，以及 `BackgroundJob` 的互斥、状态轮询和任务恢复。缺失影片沿用 `disposal='vanished'` 隐藏，同路径文件恢复时清掉该标记；保留资产行、关联资料、观看记录和媒体目录。前端共用 `useBackgroundJob`、`confirmModal` 和查询缓存失效，首页与数据管理页使用同一入口。隔离用例覆盖缺失、恢复、离线、不可读目录、权限错误与重复扫描，无新增依赖。通用文件状态查询使用现有 Python 标准库 `pathlib`，领域判据留在 Peach。
+
 长时任务续跑复用 `job_recovery` 的本机原子记录、`BackgroundJob.checkpoint` 与 `TaskRunHandle.checkpoint`。主任务保留原 `job_id`、`run_id`、开始时间、处理范围和领域检查点；后继重排保留原进度。扫描复用现有 `os.scandir`、SQLite 批次提交、`filelock` 和 `fsutil.atomic_write_text`，保存遍历栈、文件名游标及字幕配对资料。本地资料按影片保存小份证据边车，候选成功落盘后才提交元数据完成集合；整理逐项原子保存同一批次的日志。`scrape_codes.py` 复用流式 CSV 与原始来源快照，续跑只保留已确认完成的番号，未完成番号可以重放。
 
 当前树、扫描与采集的 Git 历史，以及现有任务队列均已核对；不引入新的调度或工作流依赖。项目已固定的 APScheduler 3.11.3（MIT）负责派发，其持久 job store 记录调度任务，不能保存函数执行到哪一条影片或来源页，见[上游调度说明](https://apscheduler.readthedocs.io/en/3.x/userguide.html#adding-jobs)。结果替换沿用 Python 3.14 标准库 [`os.replace`](https://docs.python.org/3.14/library/os.html#os.replace)（PSF），锁沿用项目固定的 `filelock`，没有新增运行时体积或平台要求。隔离实证覆盖目录与目录内批次中断、关注回抓游标、固定来源集合、原任务标识与计数、候选 CSV 保留及同批整理日志；不读取真实媒体、不访问外部采集来源，也不写真实 ledger。

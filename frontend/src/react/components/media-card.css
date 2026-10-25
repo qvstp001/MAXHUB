@@ -171,6 +171,11 @@ body[data-surface="/trash"] .peach-react button[data-media-title] {
 }
 /* 封面那一层铺满格子，图本身的几何归旧样式表的 `.poster`。 */
 .peach-react [data-media-art] { position: absolute; inset: 0; display: block; }
+.peach-react [data-media-card][data-media-layout="big"] [data-media-art] img:not([data-frame]),
+.peach-react [data-media-card][data-media-layout="big"] [data-media-art] img[data-frame="front"] {
+  object-fit: cover;
+  object-position: center;
+}
 .peach-react :is([data-media-pic], [data-mix-cover]) img[data-backdrop-image] {
   object-fit: cover;
   object-position: center;

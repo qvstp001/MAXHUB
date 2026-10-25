@@ -8,7 +8,7 @@ export type NavigationItem<Key extends string = string> = readonly [key: Key, la
 
 export const SIDEBAR_ITEMS = [
   ['', '首页', 'home'],
-  ['performers', '艺人', 'user-round'],
+  ['performers', '女优', 'user-round'],
   ['studios', '厂牌', 'clapperboard'],
   ['tags', '标签', 'tags'],
   ['jav', 'JAV', 'jav'],

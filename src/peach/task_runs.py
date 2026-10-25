@@ -90,6 +90,7 @@ TASK_LABELS = {
     "link-check": "链接检查",
     "link-prune": "失效链接清理",
     "resource-scan": "资源同步检查",
+    "library-scan": "扫描媒体库",
     "resource-apply": "资源同步清理",
     "scraping-cover": "封面采集",
     "media-repair": "媒体修复",

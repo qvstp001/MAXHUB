@@ -29,6 +29,113 @@ def finish_scan(contract) -> dict:
     return rm_sync.w_resource_sync_scan(contract, {"background": True, "status_only": True})
 
 
+class LibraryScanTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name).resolve()
+        self.mount = self.root / "media"
+        self.mount.mkdir()
+        self.empty = self.mount / "empty"
+        self.empty.mkdir()
+        self.kept = self.mount / "present.strm"
+        self.kept.write_bytes(b"pointer")
+        self.returned = self.mount / "returned.strm"
+        self.returned.write_bytes(b"pointer")
+        self.db = fresh_ledger(self.root)
+        self.contract = rm_web.WebContract(self.db)
+        self.addCleanup(self.contract.stop_background_jobs)
+        with contextlib.closing(sqlite3.connect(self.db)) as connection, connection:
+            connection.executemany(
+                "INSERT INTO asset(id,location,path,name,medium,disposal,rating) "
+                "VALUES(?,?,?,?, 'video',?,?)", [
+                    (1, "local", str(self.kept), "present", None, None),
+                    (2, "local", str(self.mount / "removed" / "gone.strm"), "gone", None, None),
+                    (3, "local", str(self.mount / "rated.strm"), "rated", None, 4),
+                    (4, "local", str(self.returned), "returned", "vanished", None),
+                    (5, "local", str(self.mount / "trash.strm"), "trash", "trash", None),
+                    (6, "local", str(self.root / "outside.strm"), "outside", None, None),
+                    (7, "115", str(self.root / "offline" / "gone.strm"), "offline", None, None),
+                ])
+            connection.execute("INSERT INTO asset_tag(asset_id,tag,source) VALUES(3,'标签','test')")
+        declaration = mock.patch.object(rm_sync, "LOCATION_ROOT_DECLARATIONS", {
+            "local": (str(self.mount),), "115": (str(self.root / "offline"),)})
+        declaration.start()
+        self.addCleanup(declaration.stop)
+
+    def run_scan(self):
+        from peach.web_router import dispatch_api_get, dispatch_api_post
+        started = dispatch_api_post(self.contract, "/api/library-scan", {"confirmed": True})
+        self.contract.library_scan_job.thread.join(10)
+        result = dispatch_api_get(self.contract, "/api/library-scan", {})
+        self.assertEqual(result["job_id"], started["job_id"])
+        self.assertEqual(result["status"], "complete", result)
+        return result
+
+    def disposals(self):
+        with contextlib.closing(sqlite3.connect(self.db)) as connection:
+            return dict(connection.execute("SELECT id,disposal FROM asset"))
+
+    def test_missing_records_are_hidden_and_returned_files_are_restored(self):
+        result = self.run_scan()
+        self.assertEqual((result["hidden"], result["restored"]), (2, 1))
+        self.assertEqual(self.disposals(), {1: None, 2: "vanished", 3: "vanished", 4: None,
+                                           5: "trash", 6: None, 7: None})
+        with contextlib.closing(sqlite3.connect(self.db)) as connection:
+            self.assertEqual(connection.execute("SELECT rating FROM asset WHERE id=3").fetchone(), (4,))
+            self.assertEqual(connection.execute("SELECT tag FROM asset_tag WHERE asset_id=3").fetchone(), ("标签",))
+        self.assertTrue(self.empty.is_dir())
+        self.assertEqual(self.kept.read_bytes(), b"pointer")
+        self.assertEqual(self.returned.read_bytes(), b"pointer")
+        self.assertEqual(self.run_scan()["hidden"], 0)
+        missing = self.mount / "removed" / "gone.strm"
+        missing.parent.mkdir()
+        missing.write_bytes(b"restored")
+        self.assertEqual(self.run_scan()["restored"], 1)
+        self.assertIsNone(self.disposals()[2])
+
+    def test_offline_source_during_scan_preserves_all_records(self):
+        answers = iter((True, False, False))
+        with mock.patch.object(rm_sync, "source_is_online", side_effect=lambda _: next(answers)):
+            result = self.run_scan()
+        self.assertEqual((result["hidden"], result["restored"]), (0, 0))
+        self.assertIsNone(self.disposals()[2])
+
+    def test_unreadable_directory_preserves_records(self):
+        private = self.mount / "private"
+        private.mkdir()
+        with contextlib.closing(sqlite3.connect(self.db)) as connection, connection:
+            connection.execute("UPDATE asset SET path=? WHERE id=3", (str(private / "rated.strm"),))
+        original = os.scandir
+        def guarded(path):
+            if Path(path) == private:
+                raise PermissionError("unreadable")
+            return original(path)
+        with mock.patch.object(rm_sync.os, "scandir", side_effect=guarded):
+            result = self.run_scan()
+        self.assertEqual(result["hidden"], 1)
+        self.assertIsNone(self.disposals()[3])
+        self.assertGreater(result["sources"][0]["unreadable"], 0)
+
+    def test_stat_permission_error_is_not_missing_evidence(self):
+        original = Path.stat
+        def guarded(path, *args, **kwargs):
+            if path == self.mount / "rated.strm":
+                raise PermissionError("unreadable")
+            return original(path, *args, **kwargs)
+        with mock.patch.object(Path, "stat", guarded):
+            result = self.run_scan()
+        self.assertEqual(result["hidden"], 1)
+        self.assertIsNone(self.disposals()[3])
+
+    def test_confirmation_is_required(self):
+        from peach.web_router import READ_ONLY_POST_ROUTES
+        self.assertNotIn('/api/library-scan', READ_ONLY_POST_ROUTES)
+        with self.assertRaisesRegex(ValueError, "确认"):
+            rm_sync.w_library_scan(self.contract, {})
+        self.assertIsNone(self.contract.library_scan_job.snapshot())
+
+
 class PurgeMissingTests(unittest.TestCase):
     """对账：磁盘上已删掉的文件，账本行要么进回收站（按目录），要么直接删（整库）；
     带个人记录的两条路径都只标已消失。

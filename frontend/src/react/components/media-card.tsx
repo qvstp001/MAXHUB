@@ -271,6 +271,7 @@ function VideoCard({ item, variant, layout, selected, selectMode, seekSeconds, h
 
   return (
     <article ref={attach} data-media-card="" data-id={item.id} data-variant={variant}
+      data-media-layout={layout.active ? layout.size : undefined}
       data-jav-item={item.is_jav ? '' : undefined}
       data-part-seed={parts ? parts.seed_id : undefined} data-stacked={stacked ? '' : undefined}
       data-pending-delete={item.disposal === 'trash' ? '' : undefined} data-selected={selected ? '' : undefined}

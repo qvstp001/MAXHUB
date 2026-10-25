@@ -92,6 +92,20 @@ const BIG_LAYOUT_RATIO = COVER_FRONT_RATIO;
 const fullHeight = (left: number) => ({ top: 0, right: 0, bottom: 0, left });
 
 describe('正封取景框换算成卡片里的位置', () => {
+  it('铺满模式的正封四边覆盖卡框', () => {
+    for (const x0 of [200, 500, 850]) {
+      const box = { x0, y0: 100, x1: 1000, y1: 900, px: [1000, 1000] };
+      const frame = panelFrame(box, 0.75, 'cover')!;
+      const left = frame.left + x0 / 1000 * frame.height / 0.75;
+      const right = frame.left + frame.height / 0.75;
+      const top = frame.top + 0.1 * frame.height;
+      const bottom = frame.top + 0.9 * frame.height;
+      expect(left).toBeLessThanOrEqual(0.02);
+      expect(right).toBeGreaterThanOrEqual(99.98);
+      expect(top).toBeLessThanOrEqual(0.02);
+      expect(bottom).toBeGreaterThanOrEqual(99.98);
+    }
+  });
   it('正封装得下就居中，两侧留白相等', () => {
     // 1600×1000 的封套，折痕右侧那块正封从 887 开始。图片按卡片高度铺满后宽是
     // 卡片的 1.6/0.75≈2.1333 倍，正封占其中 (1−0.554375)×2.1333≈0.9507 倍卡片宽，

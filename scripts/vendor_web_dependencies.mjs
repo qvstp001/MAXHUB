@@ -110,6 +110,7 @@ const lucideIcons = new Map([
   ["home", "home"], ["panel-left", "panel-left"], ["search", "search"],
   ["layout-grid", "layout-grid"], ["square-check-big", "square-check-big"],
   ["columns-2", "columns-2"],
+  ["rectangle-vertical", "rectangle-vertical"], ["rectangle-horizontal", "rectangle-horizontal"],
   ["refresh-cw", "refresh-cw"], ["user-round", "user-round"], ["tags", "tags"],
   ["list-filter", "list-filter"], ["chart", "chart-no-axes-column"],
   ["settings", "settings"], ["gauge", "gauge"],

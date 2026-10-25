@@ -42,6 +42,18 @@ function setup() {
 }
 
 describe('实体与索引域控制', () => {
+  it('女优作品按番号升序进入，地址中的排序和方向可往返', () => {
+    const entry = createEntityEntryState();
+    entry.fresh('performer', '甲');
+    expect(entry.read('performer', '甲', '', { sort: 'code', dir: 'desc' }).filters)
+      .toMatchObject({ sort: 'code', dir: 'asc' });
+    expect(entry.read('performer', '甲', '', preference).filters).toMatchObject({ sort: 'code', dir: 'asc' });
+    for (const [sort, dir] of [['code', 'desc'], ['new', 'desc'], ['rating', 'asc']]) {
+      const path = entityViewPath('performer', '甲', { ...emptyEntityFilters('performer'), sort: sort!, dir: dir! });
+      expect(parseEntityFilters(path.slice(path.indexOf('?')), preference, 'performer')).toMatchObject({ sort, dir });
+    }
+    expect(parseEntityFilters('?tag=one', preference, 'performer')).toMatchObject({ sort: 'code', dir: 'asc', tag: 'one' });
+  });
   it('排序按地址与偏好解析，默认项省略，图集只在照片视图认数字 set', () => {
     expect(parseEntityFilters('?sort=short', preference)).toMatchObject({ sort: 'dur', dir: 'asc' });
     expect(parseEntityFilters('', { sort: 'new', dir: 'asc' })).toMatchObject({ sort: 'new', dir: 'asc' });

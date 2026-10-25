@@ -10,6 +10,7 @@ import * as legacyUi from '@peach/legacy/ui';
 
 import type { DataCleanupSection } from '../../src/react/bundle';
 import { DataCleanupPage } from '../../src/react/data-cleanup/data-cleanup-page';
+import { LibraryScanButton } from '../../src/react/library-processing/library-scan';
 import { junkBreakdown, prefetchDataCleanup, reviewSummary } from '../../src/react/data-cleanup/data-cleanup';
 import { LinkManager } from '../../src/react/data-cleanup/link-manager';
 import type { LinkCheckState } from '../../src/react/data-cleanup/links';
@@ -78,6 +79,47 @@ function confirmWith(answer: boolean) {
 
 const wrap = (element: ReactElement) => mount(<QueryClientProvider client={queryClient}>{element}</QueryClientProvider>);
 
+describe('媒体库索引扫描', () => {
+  it('取消确认时不启动扫描', async () => {
+    const server = serve({ '/api/library-scan': { status: 'idle' } });
+    confirmWith(false);
+    await wrap(<LibraryScanButton />);
+    await click(buttonNamed('扫描媒体库'));
+    expect(server.posts('/api/library-scan')).toEqual([]);
+  });
+
+  it('完成后报告移出和恢复数量，并重读馆藏', async () => {
+    let started = false;
+    const receipt = vi.fn();
+    const completed = vi.fn();
+    const server = serve({ '/api/library-scan': (_body: unknown, method: string) => {
+      if (method === 'POST') { started = true; return { status: 'running' } }
+      return started ? { status: 'complete', hidden: 2, restored: 1, sources: [] } : { status: 'idle' };
+    } });
+    confirmWith(true);
+    queryClient.setQueryData(['catalog-grid', 'test'], { total: 3 });
+    await wrap(<LibraryScanButton receipt={receipt} onComplete={completed} />);
+    await click(buttonNamed('扫描媒体库'));
+    await settle();
+    expect(server.posts('/api/library-scan')).toEqual([{ confirmed: true }]);
+    expect(receipt).toHaveBeenCalledExactlyOnceWith('已扫描媒体库，移出 2 部，恢复 1 部');
+    expect(completed).toHaveBeenCalledOnce();
+    expect(queryClient.getQueryState(['catalog-grid', 'test'])?.isInvalidated).toBe(true);
+  });
+
+  it('启动失败保留错误和可重试入口', async () => {
+    serve({ '/api/library-scan': (_body: unknown, method: string) => method === 'POST'
+      ? failWith(409, { error: '已有扫描任务' }) : { status: 'idle' } });
+    const confirmations = confirmWith(false);
+    const host = await wrap(<LibraryScanButton />);
+    await click(buttonNamed('扫描媒体库'));
+    await act(async () => { await expect(confirmations[0]!.onConfirm!()).rejects.toThrow('已有扫描任务') });
+    await settle();
+    expect(host.textContent).toContain('已有扫描任务');
+    expect(buttonNamed('扫描媒体库')!.getAttribute('aria-busy')).toBeNull();
+  });
+});
+
 const withRoots: MediaSourcesData = {
   sources: [{ location: 'local', online: true, roots: ['R:\\media'] }, { location: '115', online: false, roots: ['B:\\'] },
     { location: 'online', online: true }],
@@ -103,6 +145,7 @@ const pageRoutes = (sources: MediaSourcesData): Record<string, Route> => ({
   '/api/items?state=trash&limit=1': { total: 9, bytes: 3 * 1073741824 },
   '/api/sources': sources,
   '/api/library-processing': { status: 'idle' },
+  '/api/library-scan': { status: 'idle' },
   '/api/media-repair': IDLE_REPAIR,
   '/api/libraries': { libraries: [] },
   '/api/organize': organizeIdle,

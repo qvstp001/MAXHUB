@@ -77,6 +77,8 @@ export interface CatalogFilterActions {
   reshuffle(): Promise<void>;
   setLayout(value: string): void;
   setCardWidth?(mode: 'big' | 'small', value: number): void;
+  receipt?(message: string): void;
+  scanComplete?(): void;
   /** 某一排手上这份摆完了，要下一页。返回空数组就是到底了。 */
   moreTops(kind: TierKind): Promise<TierPerformer[] | TierStudio[]>;
 }

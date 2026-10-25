@@ -2,19 +2,21 @@ import { entityPath } from '@peach/legacy/core';
 import { defaultSortDir, sortFromAddress } from '../../sort-preferences';
 import { ENTITY_FILTER_KEYS, type EntityFilters, type EntityMedia } from './entity-page';
 
-export const emptyEntityFilters = (): Record<string, string> => Object.fromEntries(
-  ENTITY_FILTER_KEYS.map(key => [key, key === 'sort' ? 'new' : key === 'dir' ? 'desc' : '']));
+export const emptyEntityFilters = (kind = ''): Record<string, string> => Object.fromEntries(
+  ENTITY_FILTER_KEYS.map(key => [key, key === 'sort' ? (kind === 'performer' ? 'code' : 'new')
+    : key === 'dir' ? (kind === 'performer' ? 'asc' : 'desc') : '']));
 
-/** 排序偏好只决定未显式给方向的地址；资料页缺省列仍是入库时间。 */
-export function parseEntityFilters(search: string, preference: { sort: string; dir: string }): EntityFilters {
-  const params = new URLSearchParams(search), filters = emptyEntityFilters();
+/** 女优作品默认按番号升序，显式地址保留指定的列与方向。 */
+export function parseEntityFilters(search: string, preference: { sort: string; dir: string }, kind = ''): EntityFilters {
+  const params = new URLSearchParams(search), filters = emptyEntityFilters(kind);
   for (const key of ENTITY_FILTER_KEYS) if (key !== 'sort' && key !== 'dir') filters[key] = params.get(key) || '';
-  return { ...filters, ...sortFromAddress(params.get('sort'), params.get('dir'), preference.sort, preference.dir, 'new') };
+  const defaults = kind === 'performer' ? { sort: 'code', dir: 'asc' } : preference;
+  return { ...filters, ...sortFromAddress(params.get('sort'), params.get('dir'), defaults.sort, defaults.dir, filters.sort) };
 }
 
-export function entityFilterSearch(filters: EntityFilters): string {
+export function entityFilterSearch(filters: EntityFilters, kind = ''): string {
   const params = new URLSearchParams();
-  for (const key of ENTITY_FILTER_KEYS) if (filters[key] && !(key === 'sort' && filters[key] === 'new')
+  for (const key of ENTITY_FILTER_KEYS) if (filters[key] && !(key === 'sort' && filters[key] === emptyEntityFilters(kind).sort)
     && !(key === 'dir' && filters[key] === defaultSortDir(filters.sort || ''))) params.set(key, filters[key]);
   return params.toString();
 }
@@ -25,8 +27,8 @@ export function parseMediaView(search: string): EntityMedia {
     set: media === 'photos' && /^\d+$/.test(set) ? Number(set) : 0 };
 }
 
-export function entityViewSearch(filters: EntityFilters, media?: EntityMedia): string {
-  const params = new URLSearchParams(entityFilterSearch(filters));
+export function entityViewSearch(filters: EntityFilters, media?: EntityMedia, kind = ''): string {
+  const params = new URLSearchParams(entityFilterSearch(filters, kind));
   if (media?.media === 'photos') {
     params.set('media', 'photos');
     if (media.set) params.set('set', String(media.set));
@@ -35,7 +37,7 @@ export function entityViewSearch(filters: EntityFilters, media?: EntityMedia): s
 }
 
 export function entityViewPath(kind: string, name: string, filters: EntityFilters, media?: EntityMedia): string {
-  const search = entityViewSearch(filters, media);
+  const search = entityViewSearch(filters, media, kind);
   return entityPath(kind, name) + (search ? `?${search}` : '');
 }
 
@@ -47,7 +49,7 @@ export function createEntityEntryState() {
     read(kind: string, name: string, search: string, preference: { sort: string; dir: string }) {
       const fresh = freshPath === entityPath(kind, name) && !search;
       freshPath = '';
-      const filters = fresh ? emptyEntityFilters() : { ...parseEntityFilters(search, preference) };
+      const filters = fresh ? emptyEntityFilters(kind) : { ...parseEntityFilters(search, preference, kind) };
       if (kind === 'creator') filters.creator = '';
       return { filters, media: fresh ? { media: 'videos' as const, set: 0 } : parseMediaView(search) };
     },
