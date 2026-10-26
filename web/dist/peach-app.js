@@ -109928,11 +109928,13 @@ async function i9() {
 		},
 		detailReturnBarsContext: null
 	}), _9(!1), G.state === "ads") return e_t(e);
-	if (Z.controller.page === "/junk-files" && a9(), w7(), A7(), t7(location.pathname) && G.browse !== "folders") {
-		if (await C7.entityShapesReady, !$.surfaceCurrent(e)) return;
-		Ymt();
-	} else n7();
-	return r9(), R("#count").classList.remove("manage-static", "junkcount"), Ygt(e);
+	Z.controller.page === "/junk-files" && a9(), w7(), A7();
+	let t = Promise.resolve();
+	t7(location.pathname) && G.browse !== "folders" ? t = Promise.resolve(C7.entityShapesReady).then(() => {
+		$.surfaceCurrent(e) && Ymt();
+	}) : n7(), r9(), R("#count").classList.remove("manage-static", "junkcount");
+	let n = Ygt(e);
+	return Promise.all([t, n]).then(([, e]) => e);
 }
 function Jgt(e) {
 	Z.controller.settle(e);
@@ -111600,11 +111602,7 @@ function Q_t() {
 		}
 	}, U9.routing = !1, K5.own(vO.listen((e) => {
 		$.queueOpenRequest && e.seq !== $.queueOpenRequest.seq && !WD(e.location.pathname) && _9(!1), U9.routing && !e.claimed && O9();
-	})), zpt(U9.shellActions).catch((e) => console.error("客户端导航装载失败", e)), lgt(), Pht(), F7(), Promise.all([
-		f9(),
-		sgt(),
-		C7.entityShapesReady
-	]).then(() => e.isActive && C7.wantsDiscoveryBars() ? t9() : null).then(() => {
+	})), zpt(U9.shellActions).catch((e) => console.error("客户端导航装载失败", e)), lgt(), Pht(), F7(), Promise.all([f9(), sgt()]).then(() => e.isActive && C7.wantsDiscoveryBars() ? t9() : null).then(() => {
 		e.isActive && (T9(), f_t(), U9.routing = !0, vl({ pageOpens: 1 }), O9(), K7());
 	}).catch((t) => {
 		e.isActive && console.error("应用启动失败", t);

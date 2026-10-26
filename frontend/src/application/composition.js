@@ -177,7 +177,8 @@ loadRouter(compositionState.shellActions).catch(error=>console.error('客户端�
 mountManageHeader();
 mountBatchDock();
 buildManageBar();
-Promise.all([loadSourceStatus(),loadSyncedSettings(),loadingState.entityShapesReady])
+// 页面结构名单由各资料面按需等待，路由启动只依赖来源与设置。
+Promise.all([loadSourceStatus(),loadSyncedSettings()])
   .then(()=>effects.isActive&&loadingState.wantsDiscoveryBars()?buildBars():null)
   .then(()=>{
     if(!effects.isActive)return;

@@ -836,6 +836,8 @@ _UNCENSORED_SITE = re.compile(
 #: 版次标记有时和番号粘在一起，中间没有分隔符：`PPPD-937CH.mp4`、`MIDV-751CH.mp4`。
 #: 只认带分隔符的写法，这些文件既拿不到「中字」徽章，番号本身还会被当标题显示。
 _GLUED_EDITION = r"(?:CH|C|SUB|UC|U)"
+_EDITION_SUFFIX_HINT = re.compile(
+    r"(?:CH|C|SUB|UC|UN|U|uncen(?:sored)?|uncensored|无码|無碼|中字|中文字幕)(?=$|[^A-Z0-9])", re.I)
 
 
 def is_uncensored_code(code: str | None) -> bool:
@@ -869,7 +871,7 @@ def jav_edition_badges(name: str | None, code: str | None,
     """Project filename/tag evidence into compact edition badges beside the code."""
     text = _MEDIA_EXTENSION.sub("", str(name or ""))
     tag_set = {str(tag).strip().casefold() for tag in tags if str(tag).strip()}
-    code_pattern = _jav_code_pattern(code)
+    code_pattern = _jav_code_pattern(code) if _EDITION_SUFFIX_HINT.search(text) else ""
     after_code = (
         re.search(
             rf"(?:^|[^A-Z0-9]){code_pattern}((?:{_GLUED_EDITION})?(?:[^A-Z0-9].*)?)$",

@@ -387,14 +387,16 @@ export async function loadCatalog(){
   if(catalogState.controller.page==='/junk-files')clearCatalogGrid();
   renderCatalogLoading();
   showHomeSurfaces();
+  let feedReady=Promise.resolve();
   if(isFeedNewPath(location.pathname)&&state.browse!=='folders'){
-    await loadingState.entityShapesReady;
-    if(!navigationState.surfaceCurrent(surface))return;
-    renderHomeFeed();
+    feedReady=Promise.resolve(loadingState.entityShapesReady).then(()=>{
+      if(navigationState.surfaceCurrent(surface))renderHomeFeed();
+    });
   }else clearHomeFeed();
   renderCombo();
   $('#count').classList.remove('manage-static','junkcount');
-  return paintCatalogGrid(surface);
+  const gridReady=paintCatalogGrid(surface);
+  return Promise.all([feedReady,gridReady]).then(([,result])=>result);
 }
 
 export function settleCatalog(revision) { catalogState.controller.settle(revision) }

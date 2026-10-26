@@ -735,6 +735,10 @@ Python 复用 MIT 许可的 [Ruff](https://docs.astral.sh/ruff/) 0.17.0，版本
 
 普通 Toast 与扫描任务卡共用 Agent Progress 外框，16px 半径由通知栈内的既有 token 解析，细边框与接触阴影分别复用 `border-button-default`、`elevation-xs`，不改变内容排版。浏览器回归核对桌面、手机和明暗主题下的外框一致性，并以同一任务、同一内容回放外框基线生成对比图。
 
+## 页面读取与名单复用
+
+人物页面结构名单复用 `WebContract.cached_until_changed` 的账本版本缓存，实体、别名与档案写入后自动失效，不新增持久化缓存或依赖。版次徽章沿用 `catalog_rules` 的现有番号、后缀与标签判据，先用固定正则识别可能的后缀，仅在需要时建立具体番号表达式。影片卡片与人物页面结构名单并行读取；新作行等待名单，延迟响应通过现有导航代次检查，离开目录后不重新挂载。
+
 ## 独立女优资料补全
 
 容器使用现有 `vision` 可选依赖中的 OpenCV headless 5.0.0.93 与 NumPy 2.5.4，复用 `face_detect`、`face_match` 的模型地址和 SHA-256 校验。`vision_runtime` 使用现有 YuNet 检测和 SFace 128维特征推理验证完整运行路径；模型在构建阶段进入镜像，最终用户离线复验。没有新增依赖或另建匹配算法。

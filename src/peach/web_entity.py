@@ -430,6 +430,11 @@ def entity_page_shape(contract, connection, entity) -> dict:
 
 
 def q_entity_shapes(contract, args) -> dict:
+    """页面结构名单按账本版本复用，实体、别名或资料变化后重新计算。"""
+    return contract.cached_until_changed('entity-page-shapes', lambda: _read_entity_shapes(contract))
+
+
+def _read_entity_shapes(contract) -> dict:
     """资料页上可有可无的那几块，哪些实体有：新作那一行（`feed`）、卡底的同台艺人（`costars`）、
     页头右侧那张资料表（`facts`，ADR-0069），以及作品的 JAV 版式（`jav`）。
 
