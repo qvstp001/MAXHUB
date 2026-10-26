@@ -23,6 +23,7 @@ YuNet 给的是框 + 5 个关键点 + 置信度，可以按分数卡，不必靠
 from __future__ import annotations
 
 import hashlib
+import os
 import urllib.request
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -36,7 +37,8 @@ MODEL_URL = (
     "models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 )
 MODEL_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
-MODEL_PATH = TOOLS_DIR / "yunet" / "face_detection_yunet_2023mar.onnx"
+MODEL_ROOT = Path(os.environ.get("PEACH_FACE_MODELS_DIR") or TOOLS_DIR)
+MODEL_PATH = MODEL_ROOT / "yunet" / "face_detection_yunet_2023mar.onnx"
 
 #: 低于这个分数的检出不算数。YuNet 会给出置信度，不必再靠「落在左半边就是假阳性」
 #: 这类位置规则去猜——那条规则只在长封套上成立，换个版式就不成立。

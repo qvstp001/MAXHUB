@@ -17,7 +17,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import face_detect
-from .config import TOOLS_DIR
 from .face_detect import FaceDetector, main_face
 
 #: opencv_zoo 的 SFace 定版模型。走 media. 域名的原因和 YuNet 一样：仓库用 Git LFS，
@@ -27,7 +26,7 @@ MODEL_URL = (
     "models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
 )
 MODEL_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
-MODEL_PATH = TOOLS_DIR / "sface" / "face_recognition_sface_2021dec.onnx"
+MODEL_PATH = face_detect.MODEL_ROOT / "sface" / "face_recognition_sface_2021dec.onnx"
 #: 记进头像边车的模型名，回溯时要答得出「这个分是哪一版模型给的」。
 MODEL_NAME = "sface_2021dec"
 #: SFace 官方给的余弦阈值（opencv_zoo `face_recognition_sface` 的 README 与示例）：

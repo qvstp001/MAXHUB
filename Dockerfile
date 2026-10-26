@@ -11,7 +11,8 @@ COPY src ./src
 COPY migrations ./migrations
 COPY web ./web
 COPY resources ./resources
-RUN uv sync --locked --no-dev --no-editable
+RUN uv sync --locked --no-dev --no-editable --extra vision
+RUN PEACH_FACE_MODELS_DIR=/opt/peach-models .venv/bin/python -m peach.vision_runtime --prepare
 
 FROM python:3.14.8-slim-trixie
 LABEL org.opencontainers.image.title="Peach" \
@@ -22,10 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg openssl 
     && groupadd --gid 1000 peach && useradd --uid 1000 --gid 1000 --create-home peach \
     && mkdir /data && chown peach:peach /data
 COPY --from=build /app/.venv /app/.venv
+COPY --from=build /opt/peach-models /opt/peach-models
 ENV PATH="/app/.venv/bin:$PATH" PEACH_DATA_ROOT=/data PYTHONUNBUFFERED=1 \
-    PYTHONIOENCODING=utf-8 PYTHONUTF8=1
+    PYTHONIOENCODING=utf-8 PYTHONUTF8=1 PEACH_FACE_MODELS_DIR=/opt/peach-models
 WORKDIR /data
 USER peach
+RUN python -m peach.vision_runtime
 EXPOSE 8900
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

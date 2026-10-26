@@ -106,19 +106,27 @@ def _collect(contract, entity_id, handle):
     before_profile = _profile(contract, entity_id)
     before_avatar = avatar_picker.installed_digest(contract.avatar_root, 'performer', entity_id)
     failures, messages = [], []
+    profile_unavailable = avatar_unavailable = False
     try:
         summary = profiles.run(contract, profiles.followup_key(entity_id), handle, fill_missing=True)
         messages.append(str(summary.get('outcome') or '档案未取得'))
-        if any(str(value).startswith(profiles.UNFETCHED) for value in summary.get('sites', {}).values()):
-            failures.append('档案来源暂不可用')
+        unavailable = [f'{site}：{str(value)[:120]}' for site, value in summary.get('sites', {}).items()
+                       if str(value).startswith(profiles.UNFETCHED)]
+        profile_unavailable = bool(unavailable)
+        failures.extend(unavailable)
+        if summary.get('outcome') == '哪一站都没对上她':
+            messages.append('请核对姓名或补充日文别名')
     except Exception:
+        profile_unavailable = True
         failures.append('档案采集失败，请重试')
     try:
         summary = avatar_followup.run(contract, avatar_followup.followup_key('performer', entity_id), handle)
         messages.append(str(summary.get('outcome') or '头像未取得'))
         if summary.get('source_unavailable') or summary.get('face_match_unavailable'):
+            avatar_unavailable = True
             failures.append('头像来源或匹配服务暂不可用')
     except Exception:
+        avatar_unavailable = True
         failures.append('头像采集失败，请重试')
     after_profile = _profile(contract, entity_id)
     after_avatar = avatar_picker.installed_digest(contract.avatar_root, 'performer', entity_id)
@@ -127,6 +135,7 @@ def _collect(contract, entity_id, handle):
     unresolved = not after_profile or not after_avatar
     return {'entity_id': entity_id, 'name': str(row[0]), 'profile': changed_profile,
             'avatar': changed_avatar, 'retryable': bool(failures) or unresolved,
+            'source_outage': profile_unavailable and avatar_unavailable and not changed_profile and not changed_avatar,
             'message': '；'.join([*messages, *failures])[:400]}
 
 
@@ -175,10 +184,10 @@ def _run(contract, identity):
             avatars=current.get('avatars', 0) + int(result['avatar']), failed=len(retry),
             results=[*current.get('results', []), result]):
             return
-        streak = streak + 1 if result['retryable'] else 0
+        streak = streak + 1 if result.get('source_outage') else 0
         if streak >= 5:
             contract.cache_bust()
-            job.update(identity, status='failed', error='连续5位未取得完整结果，请检查来源连接后重试', completed_at=time.time())
+            job.update(identity, status='failed', error='连续5位档案与头像来源均不可用，请检查来源连接后重试', completed_at=time.time())
             return
     contract.cache_bust()
     job.update(identity, status='complete', message='已完成女优资料刮削', completed_at=time.time())

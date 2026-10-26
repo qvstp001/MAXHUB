@@ -737,4 +737,6 @@ Python 复用 MIT 许可的 [Ruff](https://docs.astral.sh/ruff/) 0.17.0，版本
 
 ## 独立女优资料补全
 
+容器使用现有 `vision` 可选依赖中的 OpenCV headless 5.0.0.93 与 NumPy 2.5.4，复用 `face_detect`、`face_match` 的模型地址和 SHA-256 校验。`vision_runtime` 使用现有 YuNet 检测和 SFace 128维特征推理验证完整运行路径；模型在构建阶段进入镜像，最终用户离线复验。没有新增依赖或另建匹配算法。
+
 `web_performer_scrape` 复用 `performer_profile_followup` 的来源缓存、限流与身份核验，复用 `avatar_followup` 和 `avatar_picker` 的头像保护与人像匹配。档案的 `fill_missing` 写入仅填空字段；人工档案整行保留。`gfriends.ensure_index` 提供有界索引刷新并保留旧缓存。任务使用 `BackgroundJob`、SQLite backup、`DiskGuard` 和统一任务恢复，前端使用 `useBackgroundJob`、确认弹窗与共享进度组件，无新增依赖。

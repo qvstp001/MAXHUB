@@ -146,6 +146,35 @@ class PerformerScrapeTests(unittest.TestCase):
         self.assertEqual([call.args[1] for call in collect.call_args_list], [2])
         self.assertEqual((end['checked'], end['profiles'], end['avatars']), (2, 1, 1))
 
+    def test_unmatched_people_do_not_stop_the_remaining_batch(self):
+        result = dict(entity_id=1, name='示例', profile=False, avatar=False, retryable=True, message='未命中')
+        job = self.contract.performer_scrape_job
+        with mock.patch.object(scrape, '_collect', side_effect=lambda _c, i, _h: {**result, 'entity_id': i}):
+            job.start(lambda identity: scrape._run(self.contract, identity), restart=True,
+                      initial={'entity_ids': list(range(1, 8)), 'total': 7, 'index_ready': True})
+            end = self.finish()
+        self.assertEqual((end['status'], end['checked'], len(end['retry_ids'])), ('complete', 7, 7))
+
+    def test_repeated_outage_stops_at_five_and_keeps_results(self):
+        result = dict(entity_id=1, name='示例', profile=False, avatar=False, retryable=True,
+                      source_outage=True, message='来源暂不可用')
+        job = self.contract.performer_scrape_job
+        with mock.patch.object(scrape, '_collect', side_effect=lambda _c, i, _h: {**result, 'entity_id': i}):
+            job.start(lambda identity: scrape._run(self.contract, identity), restart=True,
+                      initial={'entity_ids': list(range(1, 8)), 'total': 7, 'index_ready': True})
+            end = self.finish()
+        self.assertEqual((end['status'], end['checked'], len(end['retry_ids'])), ('failed', 5, 5))
+
+    def test_profile_failure_identifies_the_site_and_reason(self):
+        with mock.patch.object(scrape.profiles, 'run', return_value={
+                'outcome': '未取得', 'sites': {'minnano-av': '未取得：HTTP 403'}}), \
+                mock.patch.object(scrape.avatar_followup, 'run', return_value={'outcome': '图库未命中'}), \
+                mock.patch.object(scrape.avatar_picker, 'installed_digest', return_value=None):
+            self.post({'confirmed': True, 'entity_ids': [1]})
+            end = self.finish()
+        self.assertIn('minnano-av：未取得：HTTP 403', end['results'][0]['message'])
+        self.assertFalse(end['results'][0]['source_outage'])
+
     def test_fill_missing_preserves_held_fields_and_manual_profile(self):
         with self.contract.database.write_transaction() as db:
             write_profile(db, 1, {'height_cm': 159, 'tags': ['已有标签']}, source='auto:test', source_url='original')
