@@ -2,10 +2,7 @@ name: qmaxhub-peach-strm
 
 services:
   peach:
-    image: qmaxhub-peach-strm:0.46.1
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: ${PEACH_IMAGE:-ghcr.io/qvstp001/qmaxhub:latest}
     init: true
     restart: unless-stopped
     stop_grace_period: 75s

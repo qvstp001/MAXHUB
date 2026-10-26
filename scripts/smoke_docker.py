@@ -95,6 +95,9 @@ def main() -> None:
                "--mount", f"type=volume,source={volume},target=/data", args.image)
         ready(name)
         assert docker("exec", name, "id", "-u") == "1000"
+        vision = json.loads(docker("exec", name, "python", "-m", "peach.vision_runtime"))
+        assert vision['detector_inference'] and vision['embedding_dimensions'] == 128
+        assert not vision['allow_download']
         assert json.loads(request(name, "/api/items")) is not None
         assert json.loads(request(name, "/api/items", authenticated=False)) == {"status": 401}
         docker("exec", name, "mkdir", "/data/smoke-media")
@@ -140,7 +143,7 @@ def main() -> None:
         assert docker("exec", name, "cat", config_path) == original
         print(json.dumps({"image": args.image, "checks": ["non-root", "ready", "auth", "configuration",
                                                          "scan", "range", "vaapi-stack", "transcode-fallback",
-                                                         "reload", "restart", "persistence"]}))
+                                                         "reload", "restart", "persistence", "offline-vision-inference"]}))
     finally:
         docker("rm", "--force", name, check=False)
         docker("volume", "rm", volume, check=False)

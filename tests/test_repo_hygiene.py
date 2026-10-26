@@ -55,7 +55,8 @@ def _private_artifact(name: str) -> bool:
         return True
     if path.parent == pathlib.PurePosixPath("docs") and path.name in PRIVATE_CONTEXT_DOCUMENTS:
         return True
-    if path.name == ".env" or path.name.startswith(".env.") and path.name != ".env.example":
+    if (path.name == ".env" or path.name.startswith(".env.") and path.name != ".env.example") \
+            and name != "deploy/.env.strm.example":
         return True
     return bool(re.search(r"\.(?:db|sqlite\d*)(?:-(?:wal|shm))?$", path.name, re.I))
 
@@ -66,12 +67,12 @@ class PrivateArtifactTests(unittest.TestCase):
     def test_private_artifact_paths_are_rejected_and_public_sources_are_allowed(self):
         for name in ("docs/HANDOFF.md", "docs/STATUS.md", "docs/PRODUCT_BACKLOG.md",
                      "peach-data/review/catalog.csv", "review/current-inventory.csv",
-                     "attic/evidence/session.json", "secrets/access.json", ".env.local",
+                     "attic/evidence/session.json", "secrets/access.json", ".env.local", "deploy/.env.strm",
                      "database/ledger.db-wal", "database/history.sqlite3"):
             with self.subTest(path=name):
                 self.assertTrue(_private_artifact(name))
         for name in ("docs/REUSE.md", "docs/OPERATIONS.md", "docs/TESTING.md",
-                     "tests/test_job_status.py", "web/dist/peach-app.js", ".env.example"):
+                     "tests/test_job_status.py", "web/dist/peach-app.js", ".env.example", "deploy/.env.strm.example"):
             with self.subTest(path=name):
                 self.assertFalse(_private_artifact(name))
 

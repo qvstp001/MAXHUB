@@ -1,6 +1,6 @@
 services:
   peach:
-    image: longmeidao/peach:${PEACH_VERSION:-edge}
+    image: ${PEACH_IMAGE:-ghcr.io/qvstp001/qmaxhub:latest}
     build: .
     init: true
     restart: unless-stopped

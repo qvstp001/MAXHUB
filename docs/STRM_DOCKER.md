@@ -1,19 +1,19 @@
 # STRM 定制版与 Docker 部署
 
-本分支在 Peach 的馆藏界面、NFO 和海报读取、网页播放能力上，提供 STRM 302 直连、PotPlayer 与 Android mpv 入口。原 QMaxHub 保留在仓库 `main` 分支；本分支为可独立构建的完整 Peach 定制源码。
+本仓库 `main` 分支在 Peach 的馆藏界面、NFO 和海报读取、网页播放能力上，提供 STRM 302 直连、PotPlayer 与 Android mpv 入口。原 QMaxHub 保留在 `qmaxhub-legacy-before-peach` 标签和 Git 历史中；`codex/peach-strm` 保留定制开发历史。
 
 ## 来源与许可
 
 上游是 [peach-mitao/peach](https://github.com/peach-mitao/peach)，基于提交 `de22796c04919aaa057d77930c33c81313765569`（0.46.1）；STRM 定制内容对应本地 Peach 提交 `5bfe412`。保留上游版权、资源归属与 [AGPL-3.0-or-later 许可证](../LICENSE)。
 
-迁移分支导入上游的完整源码快照、测试和构建资源，原仓库历史由 `main` 保留。涉及的定制实现为外部播放票据与路由、STRM 跳转策略、详情媒体类型查询、外部播放器组件、测试和配套说明。
+定制代码包含上游的完整源码快照、测试和构建资源，原仓库历史完整保留。涉及的定制实现为外部播放票据与路由、STRM 跳转策略、详情媒体类型查询、外部播放器组件、测试和配套说明。
 
 ## 部署
 
 在 NAS SSH 终端使用 Bash，克隆定制分支：
 
 ```sh
-git clone --branch codex/peach-strm --single-branch https://github.com/qvstp001/qmaxhub.git peach-strm
+git clone --branch main --single-branch https://github.com/qvstp001/qmaxhub.git peach-strm
 cd peach-strm
 cp deploy/.env.strm.example .env.strm
 ```
@@ -22,10 +22,11 @@ cp deploy/.env.strm.example .env.strm
 
 `PEACH_BIND` 默认只监听本机。需要局域网访问时填写 NAS 的局域网地址，保留登录认证。数据目录和端口与原 QMaxHub 分开。
 
-构建并启动：
+拉取已验收镜像并启动：
 
 ```sh
-docker compose --env-file .env.strm -f deploy/compose.strm.yaml up -d --build
+docker compose --env-file .env.strm -f deploy/compose.strm.yaml pull peach
+docker compose --env-file .env.strm -f deploy/compose.strm.yaml up -d --no-deps --no-build --wait peach
 ```
 
 初次启动自动准备独立配置和数据库。查看首次登录口令：
@@ -37,6 +38,14 @@ docker compose --env-file .env.strm -f deploy/compose.strm.yaml exec peach peach
 浏览器打开配置的地址和端口，登录后在 Peach 配置页添加媒体目录 `/media`。选择扫描以读取 STRM、配套 NFO 和海报。宿主机目录在 Compose 中挂入，网页填写容器内路径。
 
 `/media` 使用只读绑定，应用扫描、播放和本地配套资料读取不要求媒体写权限。所有配置、数据库和缓存保存在独立 `/data`。STRM 无需补齐 Emby 兼容接口；LitePan 的 `/api/strm/play/...` 入口可直接作为指针使用，已有 Emby 上游配置可保留。
+
+## GHCR 发布与更新
+
+`main` 的镜像相关提交触发 GitHub Actions。工作流构建 Linux amd64 镜像，完成临时容器的鉴权、配置、扫描、Range、重启持久化及离线人脸推理验收后，使用仓库的 `GITHUB_TOKEN` 发布 `ghcr.io/qvstp001/qmaxhub:latest` 和 `sha-<七位提交号>` 标签。PR 只构建和验收，不发布；无需另填 Docker Hub 凭据。
+
+NAS 使用同一个 Compose 服务、端口与数据目录。更新前先用 SQLite backup API 保存一致性备份，并在停止 Peach 后保存专用数据目录快照及当前镜像摘要；再执行上述 pull 和 up 命令。`up` 仅更新 Peach 容器，不启动依赖服务、不在 NAS 构建；挂载数据保留，媒体持续只读。拉取完成不会自动改变正在运行的容器，更新时会有短暂重启。
+
+`PEACH_IMAGE` 可填写提交标签或完整镜像摘要来固定版本。回退时使用已保存的镜像标识；如涉及数据库迁移，应同时恢复配套的停止状态数据快照。已部署实例应保留其现场核对的用户、网络、重启策略和挂载配置，只修改镜像引用，不用模板覆盖实际配置。
 
 ## 播放
 
@@ -87,4 +96,4 @@ Windows 全量测试仍有两项在未修改上游中同样失败的进程检测
 docker compose --env-file .env.strm -f deploy/compose.strm.yaml stop
 ```
 
-保留专用数据目录和媒体挂载，可随时重新启动。原 QMaxHub 的主分支、数据目录与服务独立保留。
+保留专用数据目录和媒体挂载，可随时重新启动。原 QMaxHub 的源码标签、数据目录与服务独立保留。
