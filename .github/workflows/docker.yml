@@ -66,4 +66,4 @@ jobs:
           docker push "$IMAGE:$IMAGE_TAG"
           docker tag "$IMAGE:$IMAGE_TAG" "$IMAGE:latest"
           docker push "$IMAGE:latest"
-          printf '已验收并发布 `%s:%s` 和 `%s:latest`\n' "$IMAGE" "$IMAGE_TAG" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          printf '已验收并发布 %s:%s 和 %s:latest\n' "$IMAGE" "$IMAGE_TAG" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
