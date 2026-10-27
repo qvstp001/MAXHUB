@@ -22,13 +22,6 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from browserexport.parse import read_visits as read_browser_visits
-from browserexport.browsers.chrome import Chrome
-from browserexport.browsers.firefox import Firefox
-from browserexport.browsers.safari import Safari
-from browserexport.browsers.common import Schema
-from browserexport.common import BrowserexportError
-import ahocorasick
 
 from .catalog_rules import LENGTH_TAGS, TECH_TAGS
 from .review_csv import read_rows, write_rows
@@ -233,6 +226,11 @@ def _read_visits(snapshot: Path, _browser: str | None = None, *, progress=None) 
     The source database is already a consistent SQLite backup when this is called for a
     running browser.  Exported JSON/JSONL and compressed files can be passed directly.
     """
+    from browserexport.parse import read_visits as read_browser_visits
+    from browserexport.browsers.chrome import Chrome
+    from browserexport.browsers.firefox import Firefox
+    from browserexport.browsers.safari import Safari
+    from browserexport.browsers.common import Schema
     occurrences: Counter[tuple[str, str]] = Counter()
     visits: list[HistoryVisit] = []
 
@@ -369,6 +367,7 @@ def refresh_history(
     host: str | None = None,
     progress=None,
 ) -> list[dict[str, object]]:
+    from browserexport.common import BrowserexportError
     results: list[dict[str, object]] = []
     with _open_history_store(store_path, host) as (store, host, now):
         for index, source in enumerate(sources):
@@ -1514,6 +1513,7 @@ def _query_candidates(parsed):
 @lru_cache(maxsize=1)
 def _title_genre_matcher():
     """标题复用内容词表，排除依赖来源语境的省写与单字。"""
+    import ahocorasick
     from .genre_taxonomy import CONTENT_GENRES, CONTENT_ALIASES, normalise_genre, resolve_genre
     matcher = ahocorasick.Automaton()
     ambiguous = {"お掃除", "掃除", "仁王立ち", "ノーハンド", "swallow", "oral", "private", "生"}

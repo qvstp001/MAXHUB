@@ -51,8 +51,24 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: 验收临时容器和离线人脸推理
+      - name: 验收媒体库播放器与精简运行环境
         run: python3 scripts/smoke_docker.py "$IMAGE:$IMAGE_TAG"
+      - name: 记录镜像体积
+        run: |
+          docker image inspect "$IMAGE:$IMAGE_TAG" --format '镜像展开大小：{{.Size}} 字节' >> "$GITHUB_STEP_SUMMARY"
+      - name: 保存草稿 PR 验收镜像
+        if: github.event_name == 'pull_request'
+        run: |
+          docker save "$IMAGE:$IMAGE_TAG" | gzip -1 > player-image.tar.gz
+          stat --format='Docker 导出 gzip 大小：%s 字节' player-image.tar.gz >> "$GITHUB_STEP_SUMMARY"
+      - name: 上传草稿 PR 验收镜像
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: player-image-${{ github.event.pull_request.head.sha }}
+          path: player-image.tar.gz
+          compression-level: 0
+          retention-days: 3
       - name: 登录 GHCR
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4

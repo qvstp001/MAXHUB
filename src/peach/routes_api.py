@@ -11,40 +11,26 @@ router；同理本模块内部两条 catch-all 写在文件末尾，具名端点
 """
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import logging
-import os
-import re
-import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
 
-from browserexport.common import BrowserexportError
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, Request
 from fastapi.responses import JSONResponse
 
-from . import push_discovery, web_contract, web_tasks
+from . import web_contract, web_tasks
 from .field_owners import RevisionConflict
 from .folder_rules import FolderRuleConflict
 from .interaction import reveal_path
 from .jobs import TaskRunConflict
 from .update_tasks import UpdateBusy
 from .platform import is_unmapped, translate_ledger_path
-from .providers import ProviderUnavailable
 from .routes_auth import require_auth
 from .task_runs import task_label
-from .taste_history import analyze_history, import_history_exports, write_manifest
 
 router = APIRouter()
 
 LOGGER = logging.getLogger(__name__)
-
-
-@router.get("/api/providers")
-def provider_health(request: Request, args: dict[str, str] = Depends(require_auth)):
-    return request.app.state.providers.health()
 
 
 @router.get("/api/sources")
@@ -158,81 +144,6 @@ def reveal(request: Request, body: dict[str, Any] = Body(default_factory=dict), 
     return {"ok": True, "id": asset_id, "location": asset.location}
 
 
-@router.get("/api/providers/opencode-go/models")
-def opencode_go_models(request: Request, args: dict[str, str] = Depends(require_auth)):
-    try:
-        models = request.app.state.opencode_go.list_models()
-    except ProviderUnavailable:
-        return JSONResponse({"error": "provider unavailable"}, status_code=502)
-    return {"ok": True, "provider": "opencode-go", "models": models}
-
-
-@router.post("/api/taste/import")
-async def taste_import(
-    request: Request,
-    _args: dict[str, str] = Depends(require_auth),
-):
-    """Stream one private history export to local storage, then import it.
-
-    This deliberately avoids multipart/form-data and its extra parser dependency.  The
-    browser sends the file bytes as-is and provides only a display filename header.
-    """
-    contract = request.app.state.web_contract
-    maximum = 1024 * 1024 * 1024
-    try:
-        declared = int(request.headers.get("content-length") or 0)
-    except ValueError:
-        declared = 0
-    if declared > maximum:
-        return JSONResponse({"error": "导出文件超过 1 GB"}, status_code=413)
-    filename = unquote(request.headers.get("x-peach-filename") or "history-export")
-    filename = re.sub(r"[^\w.()\-\u3400-\u9fff]+", "-", os.path.basename(filename)).strip(".-")
-    filename = filename[-160:] or "history-export"
-    root = contract.taste_history_import_root
-    root.mkdir(parents=True, exist_ok=True)
-    temporary = root / f".{uuid.uuid4().hex}.part"
-    imported_target: Path | None = None
-    digest = hashlib.sha256()
-    size = 0
-    try:
-        with temporary.open("xb") as handle:
-            async for chunk in request.stream():
-                size += len(chunk)
-                if size > maximum:
-                    raise OverflowError
-                digest.update(chunk)
-                await asyncio.to_thread(handle.write, chunk)
-        if not size:
-            raise ValueError("导出文件为空")
-        target = root / f"{digest.hexdigest()[:12]}-{filename}"
-        if target.exists():
-            temporary.unlink()
-        else:
-            os.replace(temporary, target)
-            imported_target = target
-        results = await asyncio.to_thread(
-            import_history_exports, [target], contract.taste_history_store,
-        )
-        analysis = await asyncio.to_thread(
-            analyze_history, contract.taste_history_store, contract.taste_history_root,
-        )
-        write_manifest(contract.taste_history_manifest, results, analysis)
-        contract.cache_bust()
-        return {
-            "refresh": results,
-            "dashboard": web_contract.q_taste(contract, {"window": "all"}),
-        }
-    except OverflowError:
-        temporary.unlink(missing_ok=True)
-        return JSONResponse({"error": "导出文件超过 1 GB"}, status_code=413)
-    except (BrowserexportError, OSError, ValueError, TypeError) as exc:
-        temporary.unlink(missing_ok=True)
-        if imported_target is not None:
-            imported_target.unlink(missing_ok=True)
-        LOGGER.warning("taste history import rejected: %s", exc)
-        return JSONResponse({"error": str(exc)}, status_code=400)
-
-
 @router.get("/api/tasks/{run_id}")
 def task_run_detail(request: Request, run_id: int,
                     _args: dict[str, str] = Depends(require_auth)):
@@ -242,37 +153,6 @@ def task_run_detail(request: Request, run_id: int,
     except KeyError as exc:
         # `str(KeyError(...))` 会把消息连引号一起带出来，取 args 才是那句话本身。
         return JSONResponse({"error": str(exc.args[0])}, status_code=404)
-
-
-@router.post(push_discovery.WEBHOOK_PATH, status_code=204)
-def clouddrive_inbox(request: Request, body: dict[str, Any] = Body(default_factory=dict)):
-    """CloudDrive2 的文件变更通知。
-
-    这条路不走 `require_auth`：推送方是一台服务，不是带着会话 cookie 的浏览器。三道门
-    换成各自更硬的判据——来源必须是回环或局域网，请求头里的共享密钥必须对上，云端路径
-    必须落在已配置的前缀表内。前两道不成立时回 404 而不是 401：这个端点对外不必承认
-    自己存在。
-
-    收下就返回，映射与登记都交给去抖队列。上游会等这个响应，在这里做任何遍历都可能把
-    它堵住（见 `docs/reference-snapshots/amane-watcher.md`）。
-    """
-    service = request.app.state.push_discovery
-    if not (service.available and service.config.enabled and service.config.cloud):
-        raise HTTPException(404, "这个地址下没有页面。")
-    host = request.client.host if request.client else ""
-    if not push_discovery.allowed_source(host):
-        LOGGER.warning("推送发现拒收来自 %s 的请求", host or "未知来源")
-        raise HTTPException(404, "这个地址下没有页面。")
-    if not service.secret.matches(request.headers.get(push_discovery.SECRET_HEADER, "")):
-        LOGGER.warning("推送发现拒收密钥不符的请求")
-        raise HTTPException(404, "这个地址下没有页面。")
-    for cloud_path in push_discovery.parse_notification(body):
-        try:
-            service.submit_cloud(cloud_path)
-        except push_discovery.CloudPathError as exc:
-            # 一条路径映射不出来，同一批里的其余条目照常登记。
-            LOGGER.info("推送发现跳过一条云端路径：%s", exc)
-    return Response(status_code=204)
 
 
 def _conflict(error: TaskRunConflict) -> JSONResponse:
@@ -325,6 +205,8 @@ def api_post(
 ):
     sync = request.app.state.sync
     route_path = f"/api/{route}"
+    if route_path not in web_contract.POST_HANDLERS:
+        return JSONResponse({"error": "not found"}, status_code=404)
     if (sync is not None and sync.read_only
             and route_path not in web_contract.READ_ONLY_POST_ROUTES):
         # 非写入端或冲突状态都只读；继续写只会产生无法自动合并的分叉。

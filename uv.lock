@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [[package]]
@@ -1072,31 +1072,18 @@ wheels = [
 name = "peach"
 source = { editable = "." }
 dependencies = [
-    { name = "apscheduler" },
     { name = "beautifulsoup4" },
-    { name = "bencode2" },
-    { name = "browserexport" },
-    { name = "curl-cffi" },
     { name = "fastapi" },
     { name = "filelock" },
-    { name = "grpcio" },
     { name = "httpx" },
     { name = "itsdangerous" },
     { name = "m3u8" },
     { name = "pillow" },
-    { name = "protobuf" },
-    { name = "pyahocorasick" },
     { name = "pydantic" },
-    { name = "pystray" },
-    { name = "resvg-py" },
-    { name = "sentry-sdk" },
     { name = "socksio" },
     { name = "starlette" },
     { name = "tldextract" },
-    { name = "torznab" },
     { name = "uvicorn" },
-    { name = "watchdog" },
-    { name = "zeroconf" },
 ]
 
 [package.optional-dependencies]
@@ -1105,10 +1092,23 @@ build = [
     { name = "pyinstaller" },
 ]
 dev = [
+    { name = "apscheduler" },
+    { name = "bencode2" },
+    { name = "browserexport" },
+    { name = "curl-cffi" },
     { name = "filelock" },
+    { name = "grpcio" },
+    { name = "protobuf" },
     { name = "psutil" },
+    { name = "pyahocorasick" },
+    { name = "pystray" },
+    { name = "resvg-py" },
     { name = "ruff" },
     { name = "seiso" },
+    { name = "sentry-sdk" },
+    { name = "torznab" },
+    { name = "watchdog" },
+    { name = "zeroconf" },
 ]
 macos = [
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
@@ -1127,16 +1127,16 @@ vision = [
 
 [package.metadata]
 requires-dist = [
-    { name = "apscheduler", specifier = "==3.11.3" },
+    { name = "apscheduler", marker = "extra == 'dev'", specifier = "==3.11.3" },
     { name = "beautifulsoup4", specifier = "==4.15.0" },
-    { name = "bencode2", specifier = "==0.3.38" },
-    { name = "browserexport", specifier = "==0.4.4" },
-    { name = "curl-cffi", specifier = "==0.16.3" },
+    { name = "bencode2", marker = "extra == 'dev'", specifier = "==0.3.38" },
+    { name = "browserexport", marker = "extra == 'dev'", specifier = "==0.4.4" },
+    { name = "curl-cffi", marker = "extra == 'dev'", specifier = "==0.16.3" },
     { name = "dmgbuild", marker = "sys_platform == 'darwin' and extra == 'build'", specifier = "==1.6.7" },
     { name = "fastapi", specifier = "==0.143.2" },
     { name = "filelock", specifier = "==4.2.0" },
     { name = "filelock", marker = "extra == 'dev'", specifier = "==4.2.0" },
-    { name = "grpcio", specifier = "==1.84.0" },
+    { name = "grpcio", marker = "extra == 'dev'", specifier = "==1.84.0" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "itsdangerous", specifier = "==2.2.0" },
     { name = "m3u8", specifier = "==6.0.0" },
@@ -1145,25 +1145,25 @@ requires-dist = [
     { name = "opencv-python-headless", marker = "extra == 'vision'", specifier = "==5.0.0.93" },
     { name = "p115client", marker = "extra == 'maintenance-115'", specifier = "==0.0.9.7.2" },
     { name = "pillow", specifier = "==12.3.0" },
-    { name = "protobuf", specifier = "==7.36.2" },
+    { name = "protobuf", marker = "extra == 'dev'", specifier = "==7.36.2" },
     { name = "psutil", marker = "extra == 'dev'", specifier = "==7.2.2" },
-    { name = "pyahocorasick", specifier = "==2.3.1" },
+    { name = "pyahocorasick", marker = "extra == 'dev'", specifier = "==2.3.1" },
     { name = "pydantic", specifier = "==2.14.1" },
     { name = "pyinstaller", marker = "extra == 'build'", specifier = "==6.22.3" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin' and extra == 'macos'", specifier = "==12.2.2" },
-    { name = "pystray", specifier = "==0.19.5" },
-    { name = "resvg-py", specifier = "==0.5.0" },
+    { name = "pystray", marker = "extra == 'dev'", specifier = "==0.19.5" },
+    { name = "resvg-py", marker = "extra == 'dev'", specifier = "==0.5.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.17.1" },
     { name = "seiso", marker = "extra == 'dev'", specifier = "==0.4.0" },
-    { name = "sentry-sdk", specifier = "==2.72.0" },
+    { name = "sentry-sdk", marker = "extra == 'dev'", specifier = "==2.72.0" },
     { name = "socksio", specifier = "==1.0.0" },
     { name = "starlette", specifier = "==1.8.0" },
     { name = "tldextract", specifier = "==5.4.0" },
-    { name = "torznab", specifier = "==0.2.1" },
+    { name = "torznab", marker = "extra == 'dev'", specifier = "==0.2.1" },
     { name = "uvicorn", specifier = "==0.54.0" },
-    { name = "watchdog", specifier = "==6.0.0" },
+    { name = "watchdog", marker = "extra == 'dev'", specifier = "==6.0.0" },
     { name = "wordninja-enhanced", marker = "extra == 'naming'", specifier = "==3.2.0" },
-    { name = "zeroconf", specifier = "==0.151.5" },
+    { name = "zeroconf", marker = "extra == 'dev'", specifier = "==0.151.5" },
 ]
 provides-extras = ["dev", "build", "macos", "vision", "maintenance-115", "naming"]
 

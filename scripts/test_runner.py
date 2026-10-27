@@ -29,11 +29,19 @@ from . import change_impact, test_evidence, test_progress
 COMMON_PATTERNS = ("test_context_budget.py", "test_test_collection.py", "test_complexity_ratchet.py",
                    "test_source_assertion_ratchet.py", "test_python_lint.py")
 SCOPES: dict[str, tuple[str, ...]] = {
+    "player": ("test_player_runtime.py", "test_fastapi_api.py", "test_auth.py", "test_access.py",
+               "test_migrations.py", "test_field_owners.py", "test_media.py", "test_streaming.py",
+               "test_segments.py", "test_transcodes.py", "test_hardware_transcode.py", "test_mp4repair.py",
+               "test_previews.py", "test_local_artwork.py", "test_subtitles.py", "test_subtitle_xunlei.py",
+               "test_scan.py", "test_media_sources.py", "test_media_libraries.py", "test_media_folders.py",
+               "test_configuration_sources.py", "test_external_playback.py", "test_strm.py",
+               "test_dependency_policy.py", "test_server.py",
+               "test_ledger_backups.py", "test_copy_final_state.py"),
     "checks": ("test_copy_final_state.py", "test_dependency_policy.py", "test_repo_hygiene.py", "test_test_planning.py",
                "test_complexity_ratchet.py", "test_source_assertion_ratchet.py", "test_python_lint.py"),
     "follow": ("test_follow*.py", "test_http.py", "test_migrations.py", "test_wants_web.py"),
     "catalog": ("test_ad_judgement.py", "test_composite_name_split.py", "test_media_libraries.py", "test_media_folders.py",
-                "test_content_region.py",
+                "test_content_region.py", "test_player_runtime.py",
                 "test_duplicate_identity_merge.py",
                 "test_entity_classification.py", "test_company_profiles.py", "test_fc2_sellers.py",
                 "test_entity_merge.py", "test_entity_redirect.py", "test_fastapi_api.py", "test_field_owners.py",
@@ -153,6 +161,7 @@ SCOPES: dict[str, tuple[str, ...]] = {
 }
 
 SCOPE_TEST_IDS: dict[str, tuple[str, ...]] = {
+    "player": ("test_web_resource_sync.LibraryScanTests",),
     "follow": (
         "test_rm_web.WebDataTests.test_contract_handler_registries_are_complete_and_unknown_routes_fail",
         "test_rm_web.WebDataTests.test_read_only_post_routes_are_declared_and_all_exist",

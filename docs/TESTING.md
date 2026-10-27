@@ -1,5 +1,13 @@
 # 测试与依赖
 
+## 媒体库播放器
+
+当前产品使用 `scripts/test.ps1 player` 或 `bash scripts/test.sh player` 验证保留的媒体库、鉴权、扫描、数据记录、STRM、字幕和转码，以及退役 API 不可达性。新增播放器行为回归在 `test_player_runtime.py`；桌面浏览器使用 `frontend/e2e/player-library-desktop.test.ts`，通过统一入口的 `-Focus`／`--focus` 选择。
+
+自动工作流 `Player` 执行 Linux/Windows 核心回归、前端类型与 lint、Vitest、产物一致性、桌面浏览器及最小 wheel 安装。`Docker` 独立构建并验收镜像，草稿 PR 保存可下载的镜像归档，不更新 GHCR 标签。上游 `Test` 全功能矩阵仅手动运行，服务已清退功能的历史测试不属于播放器验收结论。
+
+以下完整功能域说明保留供上游模块和维护工具回归使用。依赖或共享设施变更需明确区分播放器验证和上游完整套件，不将一方结果称为另一方全部通过。
+
 这份文档讲三件事：依赖怎么装、怎么升级；改完代码要跑哪些测试、CI 怎么分；新测试该写成什么样。
 
 Windows 发布制品的覆盖升级在 Actions 的「Windows 覆盖升级验收」手动执行：填写已发布的起始版本、目标版本及目标制品的完整构建提交。工作流分别验证 ZIP 原位解压和安装包原位安装，每种路径覆盖默认数据目录与 `PEACH_DATA_ROOT` 指定目录，并上传日志。它使用已发布制品，不重新构建或发布；在线更新和失败回滚仍由 `scripts/smoke_online_update.py` 单独验证。

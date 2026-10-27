@@ -492,28 +492,20 @@ def _scan(args: argparse.Namespace) -> int:
 
 
 def _process_library(args: argparse.Namespace) -> int:
-    """命令行跑资料处理，和网页那一轮一样记进任务中心、结算时派发声明的后继。
-
-    后继写成 `pending` 行，由服务的后继通道执行：服务下次派发后继或重启时会领走。
-    """
-    from .library_processing import process_library
+    """扫描本地媒体并导入 NFO 与图片，结果记录到任务中心。"""
+    from .player_library import process_library
     from .repository import LedgerDatabase
-    from .task_runs import cli_run, declared_rows
+    from .task_runs import cli_run
     _require_readable_settings()
     config = settings_file.active()
-    with cli_run('library-processing', args.db, label='资料处理') as handle:
+    with cli_run('library-import', args.db, label='导入本地资料') as handle:
         result = process_library(config, args.db, config.directory('generated'),
                                  config.directory('generated') / 'covers', location=args.location,
                                  database=LedgerDatabase(args.db),
                                  report=lambda state: print(f"{state['stage']}：{state['checked']}/{state['total']}", flush=True))
-        rows = declared_rows(result.get('followups'))
-        queued = handle.store.enqueue_followups(handle.run_id, rows)
-        if rows:
-            print(f"后继：声明 {len(rows)} 条，入队 {len(queued['queued'])} 条，"
-                  f"已在排队 {queued['duplicates']} 条", flush=True)
         complete = result['status'] == 'complete'
         handle.finish('succeeded' if complete else 'failed',
-                      summary={'followups': len(queued['queued'])},
+                      summary={'checked': result['checked'], 'issues': result['issue_count']},
                       error='' if complete else str(result.get('error') or '资料处理未完成'))
     return 0 if complete else 1
 
@@ -757,7 +749,7 @@ def build_parser() -> argparse.ArgumentParser:
                              help="要扫描的媒体目录；省略时读取该来源的配置（非 Windows 系统使用 [media.mounts]）")
     scan_parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     scan_parser.set_defaults(handler=_scan)
-    process_parser = commands.add_parser('process', help='扫描文件并补全馆藏资料')
+    process_parser = commands.add_parser('process', help='扫描文件并导入本地 NFO 与图片')
     process_parser.add_argument('location', nargs='?', default='configured')
     process_parser.add_argument('--db', type=Path, default=DEFAULT_DB)
     process_parser.set_defaults(handler=_process_library)

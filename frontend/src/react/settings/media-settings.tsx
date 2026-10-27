@@ -24,7 +24,6 @@ import { groupRoot } from './configuration-panel';
 import { FolderRow, isCloudSource, MEDIA_SOURCES, MediaReadPolicy, MediaReadPolicyHelp, SourceSelect, sourceMark, useFolderRows } from './folder-rows';
 import { sourceDefaultCost, type SourceCost } from '../../core/media-sources';
 import { LibraryIconPicker } from './library-icon-picker';
-import { PushDiscoveryForm } from './push-discovery-settings';
 import {
   ErrorText, ExternalLink, Fact, FactList, FieldLabel, Footer, Help, Section, SourceMark, Stack,
 } from './section';
@@ -62,9 +61,6 @@ export function MediaSettings({ data, receipt, panel }: ConfigurationGroupProps)
     <div {...groupRoot(panel)}>
       {data.editable ? <MediaForm data={data} receipt={receipt} /> : <Note tone="neutral" title="只读">{data.notice}</Note>}
       {data.editable ? null : <MountStatus data={data} />}
-      {data.push_discovery
-        ? <PushDiscoveryForm initial={data.push_discovery} receipt={receipt} />
-        : null}
     </div>
   );
 }

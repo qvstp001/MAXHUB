@@ -10,52 +10,25 @@
  * 管理区几页之间的跳转走 `go`：落在 `MANAGED_ROUTES` 上的交给 React Router 的 `navigate`，其余交壳。另外
  * 四张表的页面不走 `go`：它们在页内写地址一律由壳认领（`routeIndex`、资料页与关注页的 `actions.route`、
  * 目录的换筛选、垃圾队列的换分类），跨页也交壳，打开次数同壳自己打开。 */
+import type { ConfigurationPath } from '@peach/history';
 import type { ReactElement } from 'react';
-import { settingsPath, type ConfigurationPath } from '@peach/history';
 
-import { javDisplayName, javTitleHtml } from '@peach/legacy/jav-title';
 import { tagLabel } from '@peach/legacy/tags';
 
-import { ActivityPage } from '../activity/activity-page';
-import { prefetchTasks } from '../activity/tasks';
 import { BatchDockSurface } from '../batch-dock/batch-dock-island';
-import type { DataCleanupSection, LibraryProcessingProps } from '../bundle';
 import { CatalogFilterPage } from '../catalog-filter/catalog-filter-page';
 import { prefetchCatalogGrid } from '../catalog-grid/catalog-grid';
 import { CatalogGridPage } from '../catalog-grid/catalog-grid-page';
-import { prefetchDataCleanup } from '../data-cleanup/data-cleanup';
-import { DataCleanupPage } from '../data-cleanup/data-cleanup-page';
 import { prefetchEntityPage, type EntityPageProps } from '../entity-page/entity-page';
 import { EntityPage } from '../entity-page/entity-page-view';
-import { prefetchDuplicates } from '../duplicates/duplicates';
-import { DuplicatesPage } from '../duplicates/duplicates-page';
-import { prefetchDiagnostics } from '../diagnostics/diagnostics';
-import { DiagnosticsPage } from '../diagnostics/diagnostics-page';
-import { prefetchFeedNew } from '../feed-new/feed-new';
-import { FeedNewPage } from '../feed-new/feed-new-page';
-import { prefetchFollowFeed } from '../follow-feed/follow-feed';
-import { FollowFeedPage } from '../follow-feed/follow-feed-page';
-import { prefetchFollowManage } from '../follow-manage/follow-manage';
-import { FollowManagePage } from '../follow-manage/follow-manage-page';
 import { GlowPickerSurface } from '../glow-picker/glow-picker-island';
 import { ImmerseSurface } from '../immerse/immerse-island';
 import { prefetchIndex } from '../index/index-data';
 import { IndexPage } from '../index/index-page';
 import { JunkQueuePage } from '../junk-queue/junk-queue-page';
-import { JavPage } from '../jav/jav-page';
-import { prefetchJav } from '../jav/jav';
-import { prefetchLibraryProcessing } from '../library-processing/library-processing';
-import { LibraryProcessingCard } from '../library-processing/library-processing-card';
-import { LibraryProcessingNotice } from '../library-processing/library-processing-notice';
 import { ManageHeaderSurface } from '../manage-header/manage-header-island';
 import { prefetchPlaylists } from '../playlists/playlists';
 import { PlaylistsPage } from '../playlists/playlists-page';
-import { prefetchQualityGoals } from '../quality-goals/quality-goals';
-import { QualityGoalsPage } from '../quality-goals/quality-goals-page';
-import { prefetchReview } from '../review/review';
-import { ReviewPage } from '../review/review-page';
-import { prefetchScraping } from '../scraping/scraping';
-import { ScrapingPage } from '../scraping/scraping-page';
 import { SearchPage } from '../search/search-page';
 import { prefetchConfiguration } from '../settings/configuration';
 import { ConfigurationPage } from '../settings/configuration-page';
@@ -64,13 +37,11 @@ import { SidebarSurface } from '../sidebar/sidebar-island';
 import { StageSurface } from '../stage/stage';
 import { prefetchStats } from '../stats/stats';
 import { StatsPage } from '../stats/stats-page';
-import { DEFAULT_WINDOW, prefetchTaste } from '../taste/taste';
-import { TastePage } from '../taste/taste-page';
 import { CatalogMatch } from './pages/catalog';
-import { FollowMatch, PlaylistsMatch } from './pages/follow';
+import { PlaylistsMatch } from './pages/follow';
 import { ImmerseMatch } from './pages/immerse';
 import { EntityMatch, IndexMatch } from './pages/index-entity';
-import { ManagedMatch, ResourceSyncRedirect } from './pages/managed';
+import { ManagedMatch } from './pages/managed';
 import type {
   BrowseOpenProps, BrowseRoutePath, CatalogOpenProps, CatalogPagePath, EntityRoutePath, IndexOpenProps,
   IndexOpenPropsTable, IndexRoutePath, ManagedOpenProps, ManagedPath, ResidentName, ResidentOpenProps, ShellActions,
@@ -84,44 +55,29 @@ interface ManagedRoute<P> {
   element?: ReactElement;
 }
 
-type ManagedRouteTable = { [Path in ManagedPath]: ManagedRoute<ManagedOpenProps[Path]> };
-type BrowseRouteTable = { [Path in BrowseRoutePath]: ManagedRoute<BrowseOpenProps[Path]> };
+type ManagedRouteTable = { [Path in ManagedPath]?: ManagedRoute<ManagedOpenProps[Path]> };
+type BrowseRouteTable = { [Path in BrowseRoutePath]?: ManagedRoute<BrowseOpenProps[Path]> };
 type IndexRouteTable = { [Path in IndexRoutePath]: ManagedRoute<IndexOpenPropsTable[Path]> };
 type EntityRouteTable = { [Path in EntityRoutePath]: ManagedRoute<EntityPageProps> };
 type CatalogRouteTable = { [Path in CatalogPagePath]: ManagedRoute<CatalogOpenProps[Path]> };
-type SurfaceRouteTable = { [Name in SurfaceName]: ManagedRoute<SurfaceOpenProps[Name]> };
+type SurfaceRouteTable = { [Name in SurfaceName]?: ManagedRoute<SurfaceOpenProps[Name]> };
 type ResidentRouteTable = { [Name in ResidentName]: ManagedRoute<ResidentOpenProps[Name]> };
 /** 路由树画的全部页面与面：管理区那几页、播放列表页与关注页、索引页与资料页、目录网格，加上页面内组件与常驻组件的名字。 */
 export type RoutedPath =
   ManagedPath | BrowseRoutePath | IndexRoutePath | EntityRoutePath | CatalogPagePath | SurfaceName | ResidentName;
 
 /* 数据管理页读数卡的去处里，只有重复文件不按管理区身份找：它报的是数据管理的身份。 */
-function openCleanupSection(section: DataCleanupSection, actions: ShellActions, go: (path: string) => void) {
-  if (section === 'duplicates') { go('/duplicates'); return }
-  const path = actions.managePath(section);
-  if (isManagedPath(path)) go(path);
-  else actions.openManage(section);
-}
 
 /* 第一帧在宿主放进 `#stats` 的同一个任务里同步画完（`router.tsx` 的 `ManagedSurface`）：壳画完这一页
  * 紧接着就读它画出来的结构（配置页按地址里的 `#peachProxy` 滚过去，那一刻选中的页签已经是「网络与访问」）。 */
 const configurationRoute = (path: ConfigurationPath): ManagedRoute<ManagedOpenProps['/settings/library']> => ({
   element: <ManagedMatch path={path} />,
-  prefetch: async (_open, signal) => {
-    await Promise.all([prefetchConfiguration(signal), ...(path === '/settings/diagnostics' ? [prefetchDiagnostics(signal)] : [])]);
-  },
-  page: (open, actions, go) => <ConfigurationPage receipt={message => actions.receipt(message)}
-    reopenTutorial={actions.reopenTutorial} section={path === '/settings/diagnostics' ? '系统诊断' : open.section ?? ''}
-    diagnostics={<DiagnosticsPage navigate={go} openItem={actions.openItem} receipt={message => actions.receipt(message)}
-      configure={section => { actions.requestConfigurationSection(section); go(settingsPath(section)) }} />} />,
+  prefetch: (_open, signal) => prefetchConfiguration(signal),
+  page: (open, actions) => <ConfigurationPage receipt={message => actions.receipt(message)}
+    reopenTutorial={actions.reopenTutorial} section={open.section ?? ''} />,
 });
 
 export const MANAGED_ROUTES: ManagedRouteTable = {
-  '/jav': {
-    element: <ManagedMatch path="/jav" />,
-    prefetch: (open, signal) => prefetchJav(open.tab, signal),
-    page: (open, actions) => <JavPage {...open} navigate={actions.navigate} receipt={message => actions.receipt(message)} />,
-  },
   '/stats': {
     element: <ManagedMatch path="/stats" />,
     prefetch: (_open, signal) => prefetchStats(signal),
@@ -131,78 +87,13 @@ export const MANAGED_ROUTES: ManagedRouteTable = {
         openMediaSettings={() => { actions.requestConfigurationSection('媒体库与入库'); go('/settings/library') }} />
     ),
   },
-  '/taste': {
-    element: <ManagedMatch path="/taste" />,
-    /* 首屏取的是「全部时间」那一份：分析范围是组件状态，每次进这一页都从它开始。 */
-    prefetch: (_open, signal) => prefetchTaste(DEFAULT_WINDOW, signal),
-    /* 总结里的下一步动作按路径走（`taste_history.py` 给的），路由树里没有的交壳的路由表。 */
-    page: (open, actions, go) => (
-      <TastePage onSignal={actions.openTasteSignal} navigate={go} toast={(message) => actions.receipt(message)}
-        onboarding={open.onboarding} />
-    ),
-  },
   /* ADR-0018 的确定项已由扫描与资料处理任务落库；复核页只读取剩下的判断题。 */
-  '/review': {
-    element: <ManagedMatch path="/review" />,
-    prefetch: (_open, signal) => prefetchReview(signal),
-    page: (open, actions) => (
-      <ReviewPage {...open} route={actions.routeReview} openItem={actions.openItem} openEntity={actions.openEntity}
-        revealSource={actions.revealSource} toast={(message) => actions.receipt(message)} />
-    ),
-  },
   /* 首屏等顶上那排读数里自己的几份、两张后台任务卡与整理卡；复核、高清版与链接各读各的。 */
-  '/data-cleanup': {
-    element: <ManagedMatch path="/data-cleanup" />,
-    prefetch: (_open, signal) => prefetchDataCleanup(signal),
-    page: (_open, actions, go) => (
-      <DataCleanupPage failure={actions.failure} open={(section) => openCleanupSection(section, actions, go)}
-        toast={(message, { warning = false } = {}) => (
-          warning ? actions.toast({ text: message }, { sound: 'warning' }) : actions.receipt(message))} />
-    ),
-  },
-  '/duplicates': {
-    element: <ManagedMatch path="/duplicates" />,
-    prefetch: (_open, signal) => prefetchDuplicates(signal),
-    page: (_open, actions) => (
-      <DuplicatesPage openItem={actions.openItem} failure={actions.failure}
-        toast={(message, { undo } = {}) => actions.receipt(message, undo ? { undo } : {})} />
-    ),
-  },
-  '/quality-goals': {
-    element: <ManagedMatch path="/quality-goals" />,
-    prefetch: (_open, signal) => prefetchQualityGoals(signal),
-    page: (_open, actions) => (
-      <QualityGoalsPage openItem={actions.openItem} javTitleHtml={javTitleHtml} javDisplayName={javDisplayName}
-        toast={(message) => actions.receipt(message)} srcBadge={actions.srcBadge} />
-    ),
-  },
-  '/sources': {
-    element: <ManagedMatch path="/sources" />,
-    prefetch: (_open, signal) => prefetchScraping(signal),
-    page: (_open, actions) => <ScrapingPage toast={(message) => actions.toast(message)} />,
-  },
   '/settings/library': configurationRoute('/settings/library'),
-  '/settings/subscriptions': configurationRoute('/settings/subscriptions'),
-  '/settings/downloads': configurationRoute('/settings/downloads'),
   '/settings/network': configurationRoute('/settings/network'),
   '/settings/maintenance': configurationRoute('/settings/maintenance'),
-  '/settings/diagnostics': configurationRoute('/settings/diagnostics'),
-  '/tasks': {
-    element: <ManagedMatch path="/tasks" />,
-    prefetch: (_open, signal) => prefetchTasks(signal),
-    page: () => <ActivityPage />,
-  },
   /* 首屏只取来源清单与凭据状态，地址栏指着「订阅源」时连它一起取。检查更新与查找那两趟
      后台任务的快照不在首屏里：它们常年躺着上一趟的回执，等它们只会让首屏多一个往返。 */
-  '/subscriptions': {
-    element: <ManagedMatch path="/subscriptions" />,
-    prefetch: (open, signal) => prefetchFollowManage(signal, open.tab),
-    page: (open, actions) => (
-      <FollowManagePage {...open} route={actions.routeFollowManage} savePreference={actions.saveFollowPreference}
-        toast={(message) => actions.receipt(message)} openFollow={actions.openFollow}
-        openServiceConfiguration={() => actions.navigate('/settings/subscriptions')} />
-    ),
-  },
 };
 
 /** 管理区那几页之间的跳转判据：只认 `MANAGED_ROUTES` 的精确路径。索引页不算：它们换 search 要由壳
@@ -211,7 +102,6 @@ export const isManagedPath = (path: string): path is ManagedPath => Object.hasOw
 
 /** 旧直达地址：页面组按匹配挂上元素，元素把地址改写到别的页面上，自己不画。 */
 export const REDIRECT_ROUTES: Readonly<Record<string, { element: ReactElement }>> = {
-  '/resource-sync': { element: <ResourceSyncRedirect /> },
 };
 
 /** 沉浸模式：页面组按匹配挂上元素（`pages/immerse.tsx`），元素交壳打开常驻组件 `immerse`，自己不画。 */
@@ -232,11 +122,6 @@ export const BROWSE_ROUTES: BrowseRouteTable = {
       <PlaylistsPage revision={open.revision} openPlaylist={actions.openPlaylist} openEntity={actions.openEntity}
         canFlip={actions.canFlip} toast={(message, { undo } = {}) => actions.receipt(message, undo ? { undo } : {})} />
     ),
-  },
-  '/follow': {
-    element: <FollowMatch />,
-    prefetch: (open, signal) => prefetchFollowFeed(open, signal),
-    page: (open) => <FollowFeedPage {...open} />,
   },
 };
 const isBrowsePath = (path: string): path is BrowseRoutePath => Object.hasOwn(BROWSE_ROUTES, path);
@@ -296,9 +181,7 @@ const isCatalogPage = (path: string): path is CatalogPagePath => Object.hasOwn(C
 
 /* 扫描与采集提供数据管理卡片和紧凑任务面。两边读同一个
  * `queryKey`，所以同时挂着时它们看的是同一份快照，Query 也只发一份轮询。 */
-const LibraryProcessing = (props: LibraryProcessingProps) => (
-  props.mode === 'notice' ? <LibraryProcessingNotice {...props} /> : <LibraryProcessingCard {...props} />
-);
+
 
 /* 页面里的页面内组件，按名字登记：壳每次打开交进来整份 props，之后经 `updateManagedRoute` 推补丁，页面就地
    重渲染。首页筛选条与搜索下拉不在打开前等数据（筛选条的读数与头像由壳推进来，搜索下拉的记录与推荐聚焦
@@ -307,14 +190,6 @@ export const SURFACE_ROUTES: SurfaceRouteTable = {
   'catalog-filter': {
     prefetch: async () => {},
     page: (open) => <CatalogFilterPage {...open} />,
-  },
-  'feed-new': {
-    prefetch: (open) => prefetchFeedNew(open),
-    page: (open) => <FeedNewPage {...open} />,
-  },
-  'library-processing': {
-    prefetch: (_open, signal) => prefetchLibraryProcessing(signal),
-    page: (open) => <LibraryProcessing {...open} />,
   },
   /* 输入框是壳的，下拉只接它的事件、画下拉栏里的内容。 */
   search: {

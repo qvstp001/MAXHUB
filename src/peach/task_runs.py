@@ -86,6 +86,7 @@ TASK_LABELS = {
     "follow-check": "追更检查",
     "follow-resolve": "关注来源查找",
     "library-processing": "扫描与采集",
+    "library-import": "导入本地资料",
     "taste-refresh": "口味分析",
     "link-check": "链接检查",
     "link-prune": "失效链接清理",

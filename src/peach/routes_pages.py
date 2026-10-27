@@ -699,43 +699,35 @@ def asset_route_redirect(request: Request, item_id: int, seed_id: int | None = N
     return _page_redirect(request, f"/assets/{item_id}", context=context)
 
 
-@router.api_route("/jav/movie/{code}", methods=["GET", "HEAD"])
 @router.api_route("/works/{code}", methods=["GET", "HEAD"])
 def work_route(request: Request, code: str, args: dict[str, str] = Depends(require_page_auth)):
     from .sample_images import code_key
 
+    if not request.app.state.settings.configured:
+        raise HTTPException(404, "not found")
     key = code_key(code)
     if not key:
         raise HTTPException(404, "not found")
-    path = f"/works/{quote(key, safe='')}"
-    if request.url.path != path:
-        return _page_redirect(request, path)
-    return index(request, args)
+    with request.app.state.web_contract.read_connection() as connection:
+        row = connection.execute(
+            "SELECT id FROM asset WHERE medium='video' AND disposal IS NULL "
+            "AND path IS NOT NULL AND TRIM(path)<>'' "
+            "AND normalise_code_key(code)=? ORDER BY id LIMIT 1", (key,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "not found")
+    return _page_redirect(request, f"/assets/{row['id']}")
 
 
-@router.api_route("/follow/item/{item_id}", methods=["GET", "HEAD"])
-def post_route_redirect(request: Request, item_id: int,
-                        args: dict[str, str] = Depends(require_page_auth)):
-    return _page_redirect(request, f"/posts/{item_id}")
-
-
-@router.api_route("/activity", methods=["GET", "HEAD"])
-@router.api_route("/scraping", methods=["GET", "HEAD"])
 @router.api_route("/configuration", methods=["GET", "HEAD"])
-@router.api_route("/follow-manage", methods=["GET", "HEAD"])
-@router.api_route("/diagnostics", methods=["GET", "HEAD"])
 def management_route_redirect(request: Request, args: dict[str, str] = Depends(require_page_auth)):
-    paths = {"/activity": "/tasks", "/scraping": "/sources",
-             "/configuration": "/settings/library", "/follow-manage": "/subscriptions",
-             "/diagnostics": "/settings/diagnostics"}
-    return _page_redirect(request, paths[request.url.path])
+    return _page_redirect(request, "/settings/library")
 
 
 @router.api_route("/settings/{section}", methods=["GET", "HEAD"])
 def settings_section_route(request: Request, section: str,
                            args: dict[str, str] = Depends(require_page_auth)):
     if section not in {"appearance", "playback", "jav", "search", "content", "library",
-                       "subscriptions", "downloads", "network", "maintenance", "diagnostics"}:
+                       "network", "maintenance", "diagnostics"}:
         raise HTTPException(404, "not found")
     return index(request, args)
 
@@ -780,14 +772,12 @@ def entity_route(request: Request, name: str,
 
 
 @router.api_route("/assets/{item_id}", methods=["GET", "HEAD"])
-@router.api_route("/posts/{item_id}", methods=["GET", "HEAD"])
 @router.api_route("/playlists", methods=["GET", "HEAD"])
 @router.api_route("/performers", methods=["GET", "HEAD"])
 @router.api_route("/creators", methods=["GET", "HEAD"])
 @router.api_route("/studios", methods=["GET", "HEAD"])
 @router.api_route("/agencies", methods=["GET", "HEAD"])
 @router.api_route("/tags", methods=["GET", "HEAD"])
-@router.api_route("/jav", methods=["GET", "HEAD"])
 @router.api_route("/unseen", methods=["GET", "HEAD"])
 @router.api_route("/watch-later", methods=["GET", "HEAD"])
 @router.api_route("/flagged", methods=["GET", "HEAD"])
@@ -797,17 +787,12 @@ def entity_route(request: Request, name: str,
 @router.api_route("/wall", methods=["GET", "HEAD"])
 @router.api_route("/trash", methods=["GET", "HEAD"])
 @router.api_route("/review", methods=["GET", "HEAD"])
-@router.api_route("/taste", methods=["GET", "HEAD"])
 @router.api_route("/data-cleanup", methods=["GET", "HEAD"])
 @router.api_route("/duplicates", methods=["GET", "HEAD"])
 @router.api_route("/quality-goals", methods=["GET", "HEAD"])
 # 任务中心那一屏（island），数据走 `/api/tasks`。深链要能直接打开：定时任务被挡下时
 # 留下的记录是「刚才为什么没跑」的唯一答案，从别处贴过来的地址不该是 404。
 @router.api_route("/tasks", methods=["GET", "HEAD"])
-@router.api_route("/sources", methods=["GET", "HEAD"])
-@router.api_route("/resource-sync", methods=["GET", "HEAD"])
-@router.api_route("/follow", methods=["GET", "HEAD"])
-@router.api_route("/subscriptions", methods=["GET", "HEAD"])
 # 配置页是主站里的一屏（island），数据走 `/api/configuration`。未配置时 `index()` 给的是
 # 首次运行表单，正好就是「请先完成首次设置」该长的样子。
 @router.api_route("/settings", methods=["GET", "HEAD"])

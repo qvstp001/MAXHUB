@@ -1,0 +1,102 @@
+name: Player
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: player-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  python:
+    name: 播放器核心 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: '9.0.1'
+      - run: uv sync --locked --all-extras
+      - name: Windows 核心回归
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test.ps1 player -Base origin/main
+      - name: Linux 核心回归
+        if: runner.os == 'Linux'
+        run: bash scripts/test.sh player --base origin/main
+
+  web:
+    name: 前端与桌面播放
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/actionlint
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: '9.0.1'
+      - run: uv sync --locked --all-extras
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run typecheck
+      - run: npm --prefix frontend run lint
+      - run: npm --prefix frontend test
+      - run: npm --prefix frontend run build
+      - name: 核对已提交前端产物
+        run: git diff --exit-code -- web/dist
+      - name: 桌面媒体库与播放回归
+        run: bash scripts/test.sh web --focus frontend/e2e/player-library-desktop.test.ts --base origin/main
+
+  wheel:
+    name: 最小依赖安装与启动
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v10.3.0
+      - run: uv build --wheel --out-dir wheelhouse
+      - name: 安装与验证独立 wheel
+        shell: bash
+        run: |
+          uv venv "$RUNNER_TEMP/player-runtime"
+          uv pip install --python "$RUNNER_TEMP/player-runtime/bin/python" wheelhouse/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/player-runtime/bin/python" "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"

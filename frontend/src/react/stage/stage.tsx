@@ -20,23 +20,16 @@ import { fitSkeleton, revealTexts } from '@peach/legacy/ui';
 
 import { detailSkeletonBody } from '../../board-skeleton';
 import { applyTheaterMode, closePlayerMenu, type PlayerResume } from '../../player';
-import { followItemKey, prefetchFollowDetail, type FollowDetailActions, type FollowDetailProps } from '../follow-detail/follow-detail';
-import { FollowDetailPage } from '../follow-detail/follow-detail-page';
 import { chooseItem, itemKey, prefetchItemDetail, queueKey, type DetailQueue, type ItemDetailActions, type ItemDetailProps } from '../item-detail/item-detail';
 import { ItemDetailPage } from '../item-detail/item-detail-page';
-import { javDetailKey, prefetchJavDetail, type JavDetailProps } from '../jav-detail/jav-detail';
 import { queryClient } from '../query';
-import { JavDetailPage } from '../jav-detail/jav-detail-page';
 import { Miniplayer } from './miniplayer';
 import * as player from './stage-player';
 import type { StageApi, StageHost, StagePatch, StageRequest } from './stage-api';
 
 type Phase = 'skeleton' | 'reveal' | 'content';
 
-type Content =
-  | { kind: 'item'; props: ItemDetailProps }
-  | { kind: 'jav'; props: JavDetailProps }
-  | { kind: 'follow'; props: FollowDetailProps };
+type Content = { kind: 'item'; props: ItemDetailProps };
 
 interface View {
   generation: number;
@@ -121,10 +114,7 @@ function StageDialog({ view: current }: { view: View }) {
   const { phase, content } = current;
   /* 原地换条时关注详情按条目重建：选中的那份媒体、写操作的忙碌与失败都只属于上一条。作品详情
      自己按条目给 `Detail` 换键，队列取数留在外层不重来。 */
-  const body = content.kind === 'item'
-    ? <ItemDetailPage {...content.props} />
-    : content.kind === 'jav' ? <JavDetailPage key={content.props.code} {...content.props} />
-    : <FollowDetailPage key={content.props.id} {...content.props} />;
+  const body = <ItemDetailPage {...content.props} />;
   return (
     <dialog ref={ref} id="stage" data-stage="" data-stage-kind={content.kind} aria-label="作品详情"
       onKeyDown={(event) => {
@@ -162,8 +152,7 @@ function toggleStageModes(ambient: boolean, theater: boolean): void {
 /* 两座详情的动作经舞台包一层：关闭走 `requestClose`；画出来那一刻登记小窗元数据、切氛围光与剧场
    模式；媒体框交给舞台的播放器。续播时刻只给第一次挂上的那一条。 */
 function contentFor(request: StageRequest): Content {
-  if (request.kind === 'jav') return { kind: 'jav', props: { code: request.code, readOnly: request.readOnly,
-    actions: { ...request.actions, close: requestClose } } };
+  if (request.kind !== 'item') throw new Error('该详情地址不可用');
   let resume: PlayerResume | null = request.resume ?? null;
   const takeResume = (id: number) => {
     const hit = resume && (request.id == null || request.id === id) ? resume : null;
@@ -191,20 +180,7 @@ function contentFor(request: StageRequest): Content {
     };
     return { kind: 'item', props: { ...props, actions } };
   }
-  const { kind: _kind, resume: _resume, actions: base, ...props } = request;
-  const actions: FollowDetailActions = {
-    ...base,
-    close: requestClose,
-    present: (item, kind) => {
-      player.setStageMeta({ kind: 'follow', item, title: item.title || '', sub: item.author || item.source_label || '' });
-      toggleStageModes(kind === 'video' && settings().ambientMode, kind === 'video' && settings().theaterMode);
-      queueMicrotask(() => { if (live()) base.present(item, kind) });
-    },
-    mountPlayer: (frame, item, media, options) => player.attachStagePlayer(frame, {
-      kind: 'follow', item, media, poster: item.thumb_url || undefined, onError: options.onError, resume: takeResume(item.id),
-    }),
-  };
-  return { kind: 'follow', props: { ...props, actions } };
+  throw new Error('该详情地址不可用');
 }
 
 /* 骨架抬成一层淡出，内容同时从模糊里清晰起来；走完（或 1s 兜底）摘掉那一层。 */
@@ -246,9 +222,7 @@ async function open(request: StageRequest): Promise<void> {
   else player.prepareStageFor(request.kind, request.id ?? Number.NaN);
   const content = contentFor(request);
   view = { generation: mine, request, content, phase: 'skeleton' };
-  const waiting = content.kind === 'item' ? prefetchItemDetail(content.props, abort.signal)
-    : content.kind === 'jav' ? prefetchJavDetail(content.props, abort.signal)
-    : prefetchFollowDetail(content.props, abort.signal);
+  const waiting = prefetchItemDetail(content.props, abort.signal);
   if (mine !== generation || view?.request !== request) { await waiting.catch(() => {}); return }
   const cached = cachedContent(content);
   view = { ...view, phase: cached ? 'content' : 'skeleton' };
@@ -281,8 +255,6 @@ async function open(request: StageRequest): Promise<void> {
 
 /** 可立即完整呈现的详情沿用查询缓存，刷新只更新内容。 */
 function cachedContent(content: Content): boolean {
-  if (content.kind === 'jav') return !!queryClient.getQueryData(javDetailKey(content.props.code));
-  if (content.kind === 'follow') return !!queryClient.getQueryData(followItemKey(content.props.id));
   const { queue: ref, id } = content.props;
   const queue = ref ? queryClient.getQueryData<DetailQueue>(queueKey(ref)) : null;
   if (ref && !queue) return false;
@@ -301,9 +273,7 @@ async function swap(request: StageRequest, dialog: HTMLDialogElement): Promise<v
   dismissArmed = false;
   const content = contentFor(request);
   try {
-    if (content.kind === 'item') await prefetchItemDetail(content.props, abort.signal);
-    else if (content.kind === 'jav') await prefetchJavDetail(content.props, abort.signal);
-    else await prefetchFollowDetail(content.props, abort.signal);
+    await prefetchItemDetail(content.props, abort.signal);
   } catch {
     if (abort.signal.aborted) return;
   }
@@ -368,11 +338,7 @@ function dispose({ miniplayer = true }: { miniplayer?: boolean } = {}): void {
 
 function update(patch: StagePatch): void {
   if (!view) return;
-  view = { ...view, content: view.content.kind === 'item'
-    ? { kind: 'item', props: { ...view.content.props, ...patch } }
-    : view.content.kind === 'jav' ? view.content
-    : { kind: 'follow', props: { ...view.content.props,
-      ...(patch.relatedLimit === undefined ? {} : { relatedLimit: patch.relatedLimit }) } } };
+  view = { ...view, content: { kind: 'item', props: { ...view.content.props, ...patch } } };
   paint();
 }
 

@@ -223,16 +223,16 @@ describe('首屏', () => {
     expect(readout(page.props)).toBe('视频 · 3');
   });
 
-  it('资料、作品第一页、整组照片与新作在挂载前取齐，挂上之后不再补请求', async () => {
+  it('本地资料、作品第一页与照片在挂载前取齐，挂载仅展示已有资料', async () => {
     const page = await open({ feed: { items: [{ id: 31, has_cover: true }] } });
     expect(page.calls('/api/entity')).toHaveLength(1);
     expect(page.calls('/api/items')).toHaveLength(1);
     expect(page.calls('/api/photos')).toHaveLength(1);
-    expect(page.calls('/api/feeds/discoveries')[0]?.searchParams.get('entity')).toBe('7001');
+    expect(page.calls('/api/feeds/discoveries')).toHaveLength(0);
     expect(page.fetcher.mock.calls).toHaveLength(page.requestsBeforeMount);
     expect(cards(page.props)).toEqual(['1', '2', '3']);
     expect(readout(page.props)).toBe('视频 · 3');
-    expect(page.props.hosts.feed.querySelector('[data-feed-id="31"]')).not.toBeNull();
+    expect(page.props.hosts.feed.querySelector('[data-feed-id]')).toBeNull();
   });
 
   it('路由已经取得的实体资料直接用于首屏，作品和照片仍并行取齐', async () => {
@@ -405,46 +405,14 @@ describe('照片墙', () => {
   });
 });
 
-describe('创作者的在线视图', () => {
-  const followCards = (props: EntityPageProps) =>
-    [...props.hosts.body.querySelectorAll<HTMLElement>('[data-follow-item]')].map((card) => card.dataset.followItem);
-
-  it('本地一件都没有：不出视频键，进页就落在在线；图片组多，默认是照片墙', async () => {
-    const page = await open({
-      entity: creator({ asset_count: 0 }),
-      follow: () => followPage([followGroup(1, 'image'), followGroup(2, 'image'), followGroup(3, 'video')]),
-    }, { kind: 'creator', name: 'Jul3D' });
-    await settle();
-    expect(page.calls('/api/follow')[0]?.searchParams.get('author')).toBe('name:jul3d');
-    expect(page.props.hosts.filter.querySelector('[data-entity-media]:not([data-online-media])')).toBeNull();
-    expect(page.props.hosts.filter.querySelector('[data-online-media] [aria-pressed="true"]')
-      ?.getAttribute('data-media-view')).toBe('images');
-    expect(page.props.hosts.body.querySelector('[data-follow-wall]')).not.toBeNull();
-    expect(followCards(page.props)).toEqual(['1', '2']);
-    expect(readout(page.props)).toBe('在线 · 3 项更新');
-    expect(page.props.actions.painted).toHaveBeenLastCalledWith('online', true);
-  });
-
-  it('本地与在线都有：两个键并排，在线不先取；进在线交壳写地址，筛选只在页内重取', async () => {
-    const page = await open({
-      entity: creator({ asset_count: 3, follow: heroFollow(2) }),
-      follow: (query) => followPage(query.get('provider') ? [followGroup(3, 'video')] : [followGroup(1, 'video'), followGroup(2, 'video')]),
-    }, { kind: 'creator', name: 'Jul3D' });
-    expect([...page.props.hosts.filter.querySelectorAll<HTMLElement>('[data-media-view]')]
-      .map((key) => key.dataset.mediaView)).toEqual(['videos', 'online']);
+describe('创作者本地浏览', () => {
+  it('来源关联数据保留时，人物页仅展示本地作品且不请求关注内容', async () => {
+    const page = await open({ entity: creator(), follow: () => followPage([followGroup(1, 'video')]) },
+      { kind: 'creator', name: 'Jul3D', media: { media: 'online', set: 0 } });
+    expect(cards(page.props)).toEqual(['1', '2', '3']);
     expect(page.calls('/api/follow')).toHaveLength(0);
-    await click(page.props.hosts.filter.querySelector('[data-media-view="online"]'));
-    expect(page.props.actions.route).toHaveBeenLastCalledWith({}, { media: 'online', set: 0 });
-    await push({ media: { media: 'online', set: 0 } });
-    await settle();
-    expect(followCards(page.props)).toEqual(['1', '2']);
-    expect(page.props.hosts.body.querySelector('[data-follow-wall]')).toBeNull();
-    const routed = vi.mocked(page.props.actions.route).mock.calls.length;
-    await click(page.props.hosts.filter.querySelector('[data-follow-provider="rule34video"]'));
-    await settle();
-    expect(page.calls('/api/follow').at(-1)?.searchParams.get('provider')).toBe('rule34video');
-    expect(followCards(page.props)).toEqual(['3']);
-    expect(page.props.actions.route).toHaveBeenCalledTimes(routed);
+    expect(page.calls('/api/feeds/discoveries')).toHaveLength(0);
+    expect(page.props.hosts.filter.querySelector('[data-media-view="online"]')).toBeNull();
   });
 });
 
@@ -464,33 +432,15 @@ describe('写操作', () => {
     expect(page.calls('/api/items')).toHaveLength(itemsBefore + 1);
   });
 
-  it('换完头像：资料卡与作品网格都按重取回来的数据重建，图地址换成新版本', async () => {
-    let version = 'old';
-    const page = await open({
-      entityFor: () => entity({ image_version: version }),
-      items: () => (version === 'old' ? items([1, 2, 3]) : items([4, 5, 6])),
-      picked: () => { version = 'new' },
-    }, {
-      helpers: {
-        ...shellProps().helpers,
-        portraitImg: (_kind, data) => `<img data-test-portrait src="/entity-image?v=${String(data.image_version)}">`,
-      },
+  it('本地头像按内容版本展示，人物页不展示在线选图入口', async () => {
+    const page = await open({ entity: entity({ image_version: 'local' }) }, {
+      helpers: { ...shellProps().helpers,
+        portraitImg: (_kind, data) => `<img data-test-portrait src="/entity-image?v=${String(data.image_version)}">` },
     });
-    const portrait = () => page.props.hosts.filter.ownerDocument.querySelector('[data-test-portrait]')?.getAttribute('src');
-    expect(portrait()).toBe('/entity-image?v=old');
+    expect(document.querySelector('[data-test-portrait]')?.getAttribute('src')).toBe('/entity-image?v=local');
+    expect(document.querySelector(`button[aria-label="更换${NAME}的头像"]`)).toBeNull();
+    expect(page.calls('/api/avatar-choices')).toHaveLength(0);
     expect(cards(page.props)).toEqual(['1', '2', '3']);
-    await click(document.querySelector(`button[aria-label="更换${NAME}的头像"]`));
-    await settle();
-    await click(document.querySelector('[data-avatar-choice]'));
-    await settle();
-    await click(buttonNamed('整张使用'));
-    await settle();
-    expect(page.writes.map((one) => one.url)).toEqual(['/api/avatar-frame', '/api/avatar-pick']);
-    expect(portrait()).toBe('/entity-image?v=new');
-    // 网格把第一页当初值存进自己的状态：只重取不换键，卡片（连同署名里她的脸）停在旧的那一份。
-    expect(cards(page.props)).toEqual(['4', '5', '6']);
-    // 首页顶栏那排头像是壳缓存着的，也得告诉它作废。
-    expect(page.props.actions.avatarChanged).toHaveBeenCalledOnce();
   });
 
   it('换统称：先问，写回成功才去新名字那一页；回执的撤销是另一次写回，再回到原名', async () => {
@@ -514,39 +464,9 @@ describe('写操作', () => {
     expect(page.props.actions.openEntity).toHaveBeenLastCalledWith('performer', NAME);
   });
 
-  it('订阅开关写回成功后记进这一页的资料，失败交壳出失败回执', async () => {
-    const page = await open();
-    const toggle = () => page.host.querySelector<HTMLInputElement>('input[data-entity-feed]')!;
-    await click(toggle());
-    await settle();
-    expect(page.writes[0]).toEqual({ url: '/api/feeds/source', body: { action: 'follow', entity_id: 7001, enabled: true } });
-    expect(toggle().checked).toBe(true);
-    expect(queryClient.getQueryData<{ feed: { following: boolean } }>(['entity', 'performer', NAME])?.feed.following).toBe(true);
-    page.fetcher.mockImplementationOnce(async () => ({ ok: false, status: 502, json: async () => ({}) }));
-    await click(toggle());
-    await settle();
-    expect(page.props.helpers.failure).toHaveBeenCalledWith('取消订阅新作', expect.any(Error));
-    expect(toggle().checked).toBe(true);
-  });
 
-  it('刚订上：等服务端这一轮拉取跑完，再把新作那一行重取一遍；跑着的时候不重取', async () => {
-    const page = await open({ checks: ['running', 'idle'] });
-    vi.useFakeTimers({ toFake: ['setTimeout'] });
-    await click(page.host.querySelector<HTMLInputElement>('input[data-entity-feed]'));
-    await settle();
-    const step = async () => { await act(async () => { vi.advanceTimersByTime(3000) }); await settle() };
-    await step();
-    expect(page.calls('/api/feeds/check')).toHaveLength(1);
-    expect(page.calls('/api/feeds/discoveries')).toHaveLength(1);
-    await step();
-    expect(page.calls('/api/feeds/check')).toHaveLength(2);
-    expect(page.calls('/api/feeds/discoveries')).toHaveLength(2);
-  });
 
-  it('合集开关改了换一个代次，新作那一行重取', async () => {
-    const page = await open();
-    await push({ feedRevision: 1 });
-    await settle();
-    expect(page.calls('/api/feeds/discoveries')).toHaveLength(2);
-  });
+
+
+
 });

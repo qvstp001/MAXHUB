@@ -181,20 +181,8 @@ class WebContract:
         #: `api` 作为组合根接入真实实现；裸契约用于单元测试时保持无副作用。
         self.download_junk_candidates = lambda: []
         self.download_organize_templates = lambda: {}
-        #: 后继调度（ADR-0040）。导入 `avatar_followup` 就是它的登记动作：调度器本身
-        #: 不认识任何一种后继，登记表在 `followups.REGISTRY` 里。
-        from . import avatar_followup  # noqa: F401  登记补头像后继
-        from . import creator_identity_followup  # noqa: F401  登记查创作者身份后继
-        from . import download_postprocess  # noqa: F401  登记云下载后处理
-        from . import feed_followup  # noqa: F401  登记取新作资料后继
-        from . import follow_creators  # noqa: F401  登记关注作者建档后继
-        from . import performer_alias_followup  # noqa: F401  登记补女优别名后继
-        from . import performer_profile_followup  # noqa: F401  登记补女优资料后继
-        from . import sample_followup  # noqa: F401  登记补番号样张后继
-        from . import seed_followup  # noqa: F401  登记导入实体种子后继
-        from . import studio_followup  # noqa: F401  登记补厂牌官网与标识后继
-        from .followups import FollowupRunner
-        self.followups = FollowupRunner(self)
+        #: 播放器任务不派发在线采集后继；历史记录由任务中心只读展示。
+        self.followups = None
         self.follow_job = self._job("PeachFollowCheckJob", "follow-check")
         self.feed_job = self._job("PeachFeedCheckJob", "feed-check")
         self.want_job = self._job("PeachWantScrapeJob", "want-scrape")
@@ -204,7 +192,7 @@ class WebContract:
         self.scraping_cover_job = self._job("PeachScrapingCoverJob", "scraping-cover")
         self.amane_bridge_job = self._job("PeachAmaneBridgeJob", "amane-bridge")
         self.library_processing_job = self._job(
-            "PeachLibraryProcessingJob", "library-processing")
+            "PeachLibraryImportJob", "library-import")
         self.thumbnail_job = self._job(
             "PeachTimelineThumbnailJob", "timeline-thumbnails")
         self.resource_apply_job = self._job("PeachResourceApplyJob", "resource-apply")
@@ -358,7 +346,6 @@ class WebContract:
         self.amane_bridge_job.stop()
         if hasattr(self, "jav_discovery_metadata"):
             self.jav_discovery_metadata.stop()
-        self.followups.stop()
 
     def cache_bust(self):
         with self.cache_lock:

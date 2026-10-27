@@ -108,43 +108,11 @@ if(cameFromSetup){
   if(localStorage.getItem('peach.agentation')==='on')import('/dev/agentation.js').catch(()=>{});
 }
 tutorialState.postSetupTutorialTasks = async()=>{
-  const {library,scraping,taste,follow,credentials,review}=await api('/api/post-setup-tutorial');
-  const scrapingCredentialSources=(scraping.sources||[]).filter(source=>source.accepts_cookie);
-  const savedScrapingCredentials=scrapingCredentialSources.filter(source=>source.cookie_saved);
-  const sources=(follow.sources||[]).filter(source=>source.enabled!==false);
-  const providers=new Map((credentials.providers||[]).map(row=>[row.provider,row]));
-  const required=[...new Set(sources.map(source=>source.provider))]
-    .map(provider=>providers.get(provider)).filter(row=>row?.requirement==='required');
-  const libraryReady=Number(library.total||0)>0;
-  const followReady=sources.length>0;
-  const credentialsReady=followReady&&required.every(row=>row.present&&!row.missing?.length);
-  const pendingReview=Object.values(review.counts||{})
-    .reduce((sum,value)=>sum+(Number(value)||0),0);
-  return [
-    {key:'library',label:'完成首次扫描',description:libraryReady
-      ?`已经导入 ${Number(library.total).toLocaleString()} 项馆藏。`:'等待扫描导入第一项馆藏。',
-      href:'/data-cleanup',done:libraryReady,icon:'scan-search'},
-    {key:'scraping',label:'设置采集来源与凭证',description:savedScrapingCredentials.length
-      ?`已为 ${savedScrapingCredentials.length.toLocaleString()} 个采集来源保存凭证。`
-      :'检查来源连接方式，并为需要登录的来源保存凭证。',
-      href:'/sources',done:savedScrapingCredentials.length>0,icon:'settings'},
-    {key:'history',label:'导入浏览器历史记录',description:Number(taste.history_sources||0)>0
-      ?`已导入 ${Number(taste.history_sources).toLocaleString()} 份浏览器历史。`
-      :'从这台电脑的浏览器导入口味分析记录。',
-      href:'/taste',setupEntry:true,done:Number(taste.history_sources||0)>0,icon:'history'},
-    {key:'follow',label:'添加一个关注来源',description:followReady
-      ?`已启用 ${sources.length.toLocaleString()} 个来源。`:'添加想持续追踪的创作者或来源。',
-      href:'/subscriptions?tab=add',done:followReady,icon:'rss'},
-    {key:'credentials',label:'补齐关注来源凭证',description:!followReady
-      ?'添加关注后，会按来源检查必要凭证。':required.length
-        ?(credentialsReady?'已配置当前来源需要的凭证。':`${required.length.toLocaleString()} 个来源需要凭证。`)
-        :'当前关注来源不需要凭证。',
-      href:'/subscriptions?tab=source',done:credentialsReady,icon:'key-round'},
-    {key:'review',label:'处理首次复核',description:!libraryReady
-      ?'扫描完成后，这里会列出需要复核的资料。':pendingReview
-        ?`还有 ${pendingReview.toLocaleString()} 条需要复核。`:'首次复核队列已清空。',
-      href:'/review',done:libraryReady&&pendingReview===0,icon:'square-check-big'},
-  ];
+  const library=await api('/api/items?limit=1');
+  const total=Number(library.total||0);
+  return [{key:'library',label:'导入本地媒体',description:total
+    ?`已经导入 ${total.toLocaleString()} 项馆藏。`:'添加媒体目录并导入本地媒体。',
+    href:'/settings/library',done:total>0,icon:'hard-drive'}];
 };
 tutorialState.postSetupTutorialHtml = (tasks,skippedCount,totalCount)=>{
   const ordered=[...tasks].sort((left,right)=>Number(left.done)-Number(right.done));

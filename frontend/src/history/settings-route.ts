@@ -1,9 +1,8 @@
 export const PREFERENCE_SECTIONS = {
-  appearance: '外观与导航', playback: '浏览与播放', jav: 'JAV 与新作', search: '搜索与推荐', content: '内容显示',
+  appearance: '外观与导航', playback: '浏览与播放', jav: '作品显示', search: '搜索', content: '内容显示',
 } as const;
 export const CONFIGURATION_SECTIONS = {
-  library: '媒体库与入库', subscriptions: '来源与订阅', downloads: '下载渠道', network: '网络与访问', maintenance: '应用与维护',
-  diagnostics: '系统诊断',
+  library: '媒体库与入库', network: '网络与访问', maintenance: '应用与维护',
 } as const;
 export type ConfigurationPath = `/settings/${keyof typeof CONFIGURATION_SECTIONS}`;
 export function configurationSection(path: string): string {

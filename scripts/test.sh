@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCOPE="${1:-auto}"
 case "$SCOPE" in
-    full|auto|follow|catalog|media|sync|metadata|tooling|web|checks|core|packaging) ;;
+    full|auto|player|follow|catalog|media|sync|metadata|tooling|web|checks|core|packaging) ;;
     *)
         echo "未知测试域：$SCOPE（可选 full、auto、follow、catalog、media、sync、metadata、tooling、web）" >&2
         exit 2

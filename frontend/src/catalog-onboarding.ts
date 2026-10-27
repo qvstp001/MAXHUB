@@ -25,7 +25,7 @@ export async function catalogSuggestions(state: Record<string, string>, request:
 /** 空馆藏、筛选无结果与资料尚未建立分别给出可执行入口。 */
 export function catalogEmptyHtml({ kind = 'catalog', filtered = false, jav = false, configurable = false, online = false } = {}): string {
   const add = configurable ? '<button class="geist-button primary" data-empty-settings>添加内容</button>' : '';
-  const follow = '<a class="geist-button' + (!configurable || online ? ' primary' : '') + '" href="/subscriptions?tab=add">添加关注</a>';
+  const follow = '';
   if (filtered || jav) return emptyStateHtml('search', jav ? '还没有符合条件的 JAV 作品' : '没有符合条件的内容',
     jav ? '已扫描但尚未补充发行资料的视频可在全部内容中查看。' : '清除筛选或搜索条件后查看全部内容。',
     { actions: '<a class="geist-button primary" href="/?loc=&thumb=0">查看全部内容</a>' });
@@ -38,5 +38,5 @@ export function catalogEmptyHtml({ kind = 'catalog', filtered = false, jav = fal
       online ? '添加关注来源并获取内容后，这里会显示来源上的' + label + '。' : '添加内容并补充资料后，这里会显示对应信息。',
       { actions: online ? follow : add + follow });
   }
-  return emptyStateHtml('play', '还没有视频', '添加媒体目录或关注来源，开始建立你的馆藏。', { actions: add + follow });
+  return emptyStateHtml('play', '还没有视频', '添加媒体目录并导入本地媒体，开始建立你的馆藏。', { actions: add });
 }

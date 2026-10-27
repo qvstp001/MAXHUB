@@ -52,7 +52,7 @@ def ready(name: str) -> None:
 
 
 def transcode_checks(name: str) -> None:
-    """无 GPU 的容器核对 VAAPI 软件栈与应用的整片、分片软件回退。"""
+    """无 GPU 的容器核对 FFmpeg 与应用的整片、分片软件回退。"""
     assert "vaapi" in docker("exec", name, "ffmpeg", "-hide_banner", "-hwaccels")
     assert "h264_vaapi" in docker("exec", name, "ffmpeg", "-hide_banner", "-encoders")
     assert "scale_vaapi" in docker("exec", name, "ffmpeg", "-hide_banner", "-filters")
@@ -95,11 +95,20 @@ def main() -> None:
                "--mount", f"type=volume,source={volume},target=/data", args.image)
         ready(name)
         assert docker("exec", name, "id", "-u") == "1000"
-        vision = json.loads(docker("exec", name, "python", "-m", "peach.vision_runtime"))
-        assert vision['detector_inference'] and vision['embedding_dimensions'] == 128
-        assert not vision['allow_download']
+        docker("exec", name, "python", "-c",
+               "from importlib.util import find_spec; from pathlib import Path; "
+               "retired=('cv2','numpy','curl_cffi','grpc','browserexport','ahocorasick',"
+               "'apscheduler','torznab','bencode2','pystray','watchdog','zeroconf','sentry_sdk'); "
+               "present=[module for module in retired if find_spec(module) is not None]; "
+               "assert not present, present; "
+               "assert not Path('/opt/peach-models').exists()")
         assert json.loads(request(name, "/api/items")) is not None
         assert json.loads(request(name, "/api/items", authenticated=False)) == {"status": 401}
+        for path in ("/api/follow", "/api/feeds", "/api/scraping", "/api/downloads",
+                     "/api/performer-scrape", "/api/jav/discoveries"):
+            for body in (None, {}):
+                retired = json.loads(request(name, path, body=body))
+                assert retired.get("status") in (404, 410), (path, body, retired)
         docker("exec", name, "mkdir", "/data/smoke-media")
         docker("exec", name, "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=1",
                "-t", "2", "-c:v", "libx264", "/data/smoke-media/fixture.mp4")
@@ -121,7 +130,7 @@ def main() -> None:
                 asset = int(raw.strip("(), "))
                 break
             time.sleep(1)
-        assert asset is not None, "资料处理请求未登记测试视频"
+        assert asset is not None, "媒体扫描请求未登记测试视频"
         media = json.loads(request(name, f"/stream?id={asset}", headers={"Range": "bytes=0-63"}))
         assert media == {"status": 206, "size": 64}, media
         transcode_checks(name)
@@ -143,7 +152,8 @@ def main() -> None:
         assert docker("exec", name, "cat", config_path) == original
         print(json.dumps({"image": args.image, "checks": ["non-root", "ready", "auth", "configuration",
                                                          "scan", "range", "vaapi-stack", "transcode-fallback",
-                                                         "reload", "restart", "persistence", "offline-vision-inference"]}))
+                                                         "reload", "restart", "persistence", "minimal-dependencies",
+                                                         "retired-api-unavailable"]}))
     finally:
         docker("rm", "--force", name, check=False)
         docker("volume", "rm", volume, check=False)
