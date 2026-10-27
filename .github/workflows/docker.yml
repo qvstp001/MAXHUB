@@ -55,7 +55,7 @@ jobs:
         run: python3 scripts/smoke_docker.py "$IMAGE:$IMAGE_TAG"
       - name: 记录镜像体积
         run: |
-          docker image inspect "$IMAGE:$IMAGE_TAG" --format '镜像展开大小：{{.Size}} 字节' | tee -a "$GITHUB_STEP_SUMMARY"
+          docker image inspect "$IMAGE:$IMAGE_TAG" --format 'Docker 报告镜像大小：{{.Size}} 字节' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: 保存草稿 PR 验收镜像
         if: github.event_name == 'pull_request'
         run: |

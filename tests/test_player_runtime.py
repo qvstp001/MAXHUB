@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 from PIL import Image
@@ -184,14 +184,16 @@ class LocalImportTests(unittest.TestCase):
             video.write_text("https://media.example.test/never-play.mp4", encoding="utf-8")
             video.with_suffix(".nfo").write_text("<movie><title>扫描导入</title><num>ABC-123</num></movie>", encoding="utf-8")
             db = fresh_ledger(root)
+            ledger_root = str(media) if sys.platform == 'win32' else r'R:\media'
+            missing_path = str(PureWindowsPath(ledger_root) / 'missing' / video.name)
             with closing(sqlite3.connect(db)) as connection, connection:
                 connection.execute("INSERT INTO asset(id,location,path,name,medium,code,disposal,play_count) "
                                    "VALUES(1,'local',?,'ABC-123.strm','video','ABC-123','vanished',5)",
-                                   (str(media / "missing" / "ABC-123.strm"),))
+                                   (missing_path,))
                 original = connection.execute("SELECT * FROM asset WHERE id=1").fetchone()
             config = replace(settings_file.PeachConfig(root, root / "config.toml"), present=True,
-                             locations={"local": (str(media),)})
-            with patch("peach.player_library.translate_ledger_path", side_effect=Path), \
+                             locations={"local": (ledger_root,)}, mounts={"local": (str(media),)})
+            with patch("peach.settings_file.active", return_value=config), \
                     patch("httpx.Client.request", side_effect=AssertionError("scan network request")):
                 result = process_library(config, db, root / "generated", root / "covers")
             self.assertEqual(result["issue_count"], 0, result)

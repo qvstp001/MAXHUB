@@ -48,6 +48,8 @@ jobs:
         run: ./scripts/test.ps1 player -Base origin/main
       - name: Linux 核心回归
         if: runner.os == 'Linux'
+        env:
+          PYSTRAY_BACKEND: dummy
         run: bash scripts/test.sh player --base origin/main
 
   web:
