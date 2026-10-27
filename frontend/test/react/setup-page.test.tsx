@@ -74,17 +74,17 @@ const alertsWith = (root: ParentNode, message: string) =>
   [...root.querySelectorAll('[role="alert"]')].filter((node) => node.textContent?.includes(message));
 const occurrences = (root: HTMLElement, message: string) => (root.textContent ?? '').split(message).length - 1;
 
-it('首启版本统计与错误诊断默认勾选，取消后共同关闭', async () => {
+it('首次设置聚焦本地媒体，不展示口味历史与数据上传选项', async () => {
   const reporting = { usage: true, errors: true, available: false,
     fields: { usage: '版本与系统', errors: '异常链与错误码' }, notice: '不发送媒体信息' };
-  const { host, sent } = await open({ remote_reporting: reporting, access_enabled: false },
+  const { host, sent } = await open({ remote_reporting: reporting, history_guide: true, access_enabled: false },
     { [SETUP_URL]: { status: 200, body: done() } });
   const reportingSwitches = host.querySelectorAll<HTMLInputElement>('input[aria-label="发送版本统计与错误诊断（推荐）"]');
-  expect(reportingSwitches).toHaveLength(1);
-  expect(reportingSwitches[0]!.checked).toBe(true);
-  await click(reportingSwitches[0]!);
+  expect(reportingSwitches).toHaveLength(0);
+  expect(host.textContent).not.toContain('浏览器历史记录');
   await submitForm(host);
-  expect(sent(SETUP_URL).remote_reporting).toEqual({ usage: false, errors: false });
+  expect(sent(SETUP_URL).remote_reporting).toBeUndefined();
+  expect(sent(SETUP_URL).history_guide).toBe(false);
 });
 
 /** 这句错误在页面上只有一份，落在一个 `role="alert"` 里，并由框的 `aria-describedby` 指到。 */
@@ -104,7 +104,7 @@ it('题目、默认值与题面来自读题接口：媒体库一行在外面，�
   expect(advanced(host)?.getAttribute('aria-expanded')).toBe('false');
   expect(field(host, 'port')?.value).toBe('8900');
   expect(host.textContent).toContain('localhost:');
-  expect(host.textContent).toContain('完成设置后扫描并补全资料：D:\\Videos');
+  expect(host.textContent).toContain('完成设置后扫描并导入本地媒体：D:\\Videos');
   // 「谁可以访问」是两段式单选，局域网在左边并且默认选中。
   const group = host.querySelector('[role="radiogroup"]')!;
   expect([...group.querySelectorAll('input[type="radio"]')].map((input) => [
@@ -169,7 +169,7 @@ describe('媒体库', () => {
     expect(rows(host)).toHaveLength(2);
     expect(document.activeElement).toBe(paths(host)[1]);
     await type(paths(host)[1], 'E:\\More');
-    expect(host.textContent).toContain('完成设置后扫描这 2 个文件夹并补全资料');
+    expect(host.textContent).toContain('完成设置后扫描并导入这 2 个文件夹');
     await click(rows(host)[0]!.querySelector('button[aria-label="移除这个文件夹"]'));
     expect(paths(host).map((input) => input.value)).toEqual(['E:\\More']);
     expect(rows(host)[0]!.querySelector('button[aria-label="移除这个文件夹"]')).toBeNull();
@@ -270,13 +270,13 @@ describe('完成态', () => {
     expect(document.title).toBe('Peach · 设置完成');
   });
 
-  it('选了导入浏览器历史又没扫描时，入口换成导入历史', async () => {
+  it('未扫描时提示配置页扫描入口，完成按钮进入媒体库', async () => {
     const { host } = await open({}, { [SETUP_URL]: { status: 200, body: done({
-      url: 'http://127.0.0.1:8900/taste?onboarding=1', scan_requested: false, history_guide: true }) } });
+      url: 'http://127.0.0.1:8900/?onboarding=1', scan_requested: false, history_guide: false }) } });
     await submitForm(host);
     expect(host.textContent).toContain('稍后在配置页开始扫描媒体库。');
-    const entry = [...host.querySelectorAll('a')].find((link) => link.textContent === '导入浏览器历史记录');
-    expect(entry?.getAttribute('href')).toBe('http://127.0.0.1:8900/taste?onboarding=1');
+    const entry = [...host.querySelectorAll('a')].find((link) => link.textContent === '进入 Peach');
+    expect(entry?.getAttribute('href')).toBe('http://127.0.0.1:8900/?onboarding=1');
   });
 
   it('独立包给了跳转地址：等满与配置页同一个时长再跳', async () => {

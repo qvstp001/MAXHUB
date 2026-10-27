@@ -55,12 +55,12 @@ jobs:
         run: python3 scripts/smoke_docker.py "$IMAGE:$IMAGE_TAG"
       - name: 记录镜像体积
         run: |
-          docker image inspect "$IMAGE:$IMAGE_TAG" --format '镜像展开大小：{{.Size}} 字节' >> "$GITHUB_STEP_SUMMARY"
+          docker image inspect "$IMAGE:$IMAGE_TAG" --format '镜像展开大小：{{.Size}} 字节' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: 保存草稿 PR 验收镜像
         if: github.event_name == 'pull_request'
         run: |
           docker save "$IMAGE:$IMAGE_TAG" | gzip -1 > player-image.tar.gz
-          stat --format='Docker 导出 gzip 大小：%s 字节' player-image.tar.gz >> "$GITHUB_STEP_SUMMARY"
+          stat --format='Docker 导出 gzip 大小：%s 字节' player-image.tar.gz | tee -a "$GITHUB_STEP_SUMMARY"
       - name: 上传草稿 PR 验收镜像
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7

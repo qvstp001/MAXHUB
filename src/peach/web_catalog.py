@@ -325,6 +325,54 @@ def seeded_order(seed) -> str:
     return f"((a.id * {sd}) % 99991), a.id"
 
 
+def _attach_item_people(contract: WebContract, rows) -> None:
+    """批量补齐卡片的人物身份、演员名单与可见标签。"""
+    if not rows:
+        return
+    ids = [r["id"] for r in rows]
+    qm = ",".join("?" * len(ids))
+    tmap: dict[int, list[str]] = {}
+    for aid, tag in con_tags(contract, ids, qm):
+        tmap.setdefault(aid, []).append(tag)
+    emap: dict[int, dict[str, list[str]]] = {}
+    performer_refs: dict[int, list[dict[str, object]]] = {}
+    creator_refs: dict[int, dict[str, object]] = {}
+    for aid, entity_id, kind, name in con_entities(contract, ids, qm):
+        emap.setdefault(aid, {}).setdefault(kind, []).append(name)
+        if kind == "performer":
+            performer_refs.setdefault(aid, []).append(
+                entity_ref(contract, "performer", entity_id, name))
+        elif kind == "creator" and aid not in creator_refs:
+            creator_refs[aid] = entity_ref(contract, kind, entity_id, name)
+    attach_creator_reference_details(contract, creator_refs.values())
+    for r in rows:
+        ts = tmap.get(r["id"], [])
+        canonical = emap.get(r["id"], {})
+        canonical_tags = canonical.get("tag", [])
+        canonical_performers = canonical.get("performer", [])
+        all_performers = canonical_performers or [
+            tag[3:] for tag in ts if tag.startswith("演员:")
+        ]
+        performers = all_performers[:CARD_PERFORMERS]
+        performer_names = {normalize_entity_name(name) for name in all_performers}
+        visible_tags = canonical_tags or [t for t in ts if not t.startswith("演员:")]
+        r["tags"] = [
+            tag for tag in visible_tags
+            if tag_cat(tag) in (
+                "general", "relationship", "role", "appearance", "scene", "story", "position",
+            )
+            and normalize_entity_name(tag) not in performer_names
+        ][:4]
+        r["performers"] = performers
+        refs = performer_refs.get(r["id"], [])
+        r["performer_entities"] = refs[:CARD_PERFORMERS]
+        r["creator_entity"] = creator_refs.get(r["id"])
+        if r["creator_entity"]:
+            r["creator"] = r["creator_entity"]["name"]
+        r["performer_total"] = len(refs) or len(all_performers)
+        r["_entity_kinds"] = tuple(canonical)
+
+
 def q_items(contract: WebContract, args):
     where, par = catalog_filter(contract, args)
     sort_key = str(args.get("sort") or "")
@@ -368,50 +416,7 @@ def q_items(contract: WebContract, args):
                       + video_work_key(contract, c) + ") FROM asset a WHERE "
                       + " AND ".join(where), par).fetchone()
             if include_total else (None, None, None))
-    # 卡片要显示出镜者和高权重标签，不能只有番号 —— 一次批量取，别 N+1
-    if rows:
-        ids = [r["id"] for r in rows]
-        qm = ",".join("?" * len(ids))
-        tmap: dict[int, list[str]] = {}
-        for aid, tag in con_tags(contract, ids, qm):
-            tmap.setdefault(aid, []).append(tag)
-        emap: dict[int, dict[str, list[str]]] = {}
-        performer_refs: dict[int, list[dict[str, object]]] = {}
-        creator_refs: dict[int, dict[str, object]] = {}
-        for aid, entity_id, kind, name in con_entities(contract, ids, qm):
-            emap.setdefault(aid, {}).setdefault(kind, []).append(name)
-            if kind == "performer":
-                performer_refs.setdefault(aid, []).append(
-                    entity_ref(contract, "performer", entity_id, name))
-            elif kind == "creator" and aid not in creator_refs:
-                creator_refs[aid] = entity_ref(contract, kind, entity_id, name)
-        attach_creator_reference_details(contract, creator_refs.values())
-        for r in rows:
-            ts = tmap.get(r["id"], [])
-            canonical = emap.get(r["id"], {})
-            canonical_tags = canonical.get("tag", [])
-            canonical_performers = canonical.get("performer", [])
-            all_performers = canonical_performers or [
-                tag[3:] for tag in ts if tag.startswith("演员:")
-            ]
-            performers = all_performers[:CARD_PERFORMERS]
-            performer_names = {normalize_entity_name(name) for name in all_performers}
-            visible_tags = canonical_tags or [t for t in ts if not t.startswith("演员:")]
-            r["tags"] = [
-                tag for tag in visible_tags
-                if tag_cat(tag) in (
-                    "general", "relationship", "role", "appearance", "scene", "story", "position",
-                )
-                and normalize_entity_name(tag) not in performer_names
-            ][:4]
-            r["performers"] = performers
-            refs = performer_refs.get(r["id"], [])
-            r["performer_entities"] = refs[:CARD_PERFORMERS]
-            r["creator_entity"] = creator_refs.get(r["id"])
-            if r["creator_entity"]:
-                r["creator"] = r["creator_entity"]["name"]
-            r["performer_total"] = len(refs) or len(all_performers)
-            r["_entity_kinds"] = tuple(canonical)
+    _attach_item_people(contract, rows)
     backdrops = contract.backdrop_paths([row['id'] for row in rows])
     for r in rows:
         r['has_backdrop'] = r['id'] in backdrops

@@ -34,7 +34,7 @@ export function SetupDoneView({ done }: { done: SetupDone }) {
           : '稍后在配置页开始扫描媒体库。'}
       </p>
       <ButtonLink ref={entry} href={done.url} className="self-start">
-        {done.history_guide ? '导入浏览器历史记录' : '进入 Peach'}
+        进入 Peach
       </ButtonLink>
       <Disclosure summary="运行信息">
         <FactList>

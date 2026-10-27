@@ -104,6 +104,48 @@ def _import_nfo(connection, row, payload, code):
                                    (row["id"], tag, "local_nfo"))
 
 
+def _scan_online_roots(config, db_path, locations, *, scan_files, issues):
+    """确认每个来源可读，在本次需要登记文件时扫描，返回可导入的来源根。"""
+    online = []
+    for name in locations:
+        for root in config.locations[name]:
+            actual = translate_ledger_path(root)
+            if is_unmapped(actual) or not root_online(actual):
+                issues.append({"message": "媒体来源离线", "location": name})
+                continue
+            online.append((name, root))
+            if scan_files:
+                scan_location(db_path, name, root, declared_roots=config.locations, mounts=config.mounts)
+    return online
+
+
+def _import_asset(database, cover_root, row, listings, online, state):
+    """读取单个资产的本地边车，核对身份并导入资料与封面，更新导入计数。"""
+    video = translate_ledger_path(row["path"])
+    if not any(row["location"] == name and (video == translate_ledger_path(root)
+               or video.is_relative_to(translate_ledger_path(root))) for name, root in online):
+        return
+    listing = listings.get(video.parent)
+    if listing is None:
+        listing = listings[video.parent] = SidecarIndex(directory_files(video.parent))
+    nfo, posters = listing.for_video(video)
+    payload = read_nfo(nfo)[0] if nfo else {}
+    code = normalise_code_key(row["code"] or release_code_from_filename(video.stem) or payload.get("id"))
+    if payload.get("id") and code and not same_release_code(code, payload["id"]):
+        raise ValueError("文件名与 NFO 番号冲突，请复核")
+    with database.write_transaction() as connection:
+        _import_nfo(connection, row, payload, code)
+    state["identified"] += int(bool(payload))
+    artwork = local_art(video, payload) or next(iter(posters), None)
+    if artwork:
+        if not artwork.resolve().is_relative_to(video.parent.resolve()):
+            raise ValueError("配套图片不在影片目录内")
+        if code and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}", code):
+            raise ValueError("本地图片的作品编号格式无效")
+        target = Path(cover_root) / ((code or f"ASSET-ID-{row['id']}") + ".jpg")
+        state["covers"] += int(_copy_image(artwork, target))
+
+
 def process_library(config, db_path, candidate_root, cover_root, *, location="configured", stage="all",
                     asset_ids=None, database=None, report=lambda state: None, **_unused):
     """扫描文件并导入本地 NFO 与图片，不访问外部资料或媒体地址。"""
@@ -123,48 +165,16 @@ def process_library(config, db_path, candidate_root, cover_root, *, location="co
         raise ValueError("媒体来源尚未声明")
     state = {"status": "running", "stage": "本地扫描", "checked": 0, "total": 0,
              "identified": 0, "covers": 0, "issues": [], "issue_count": 0, "followups": []}
-    online = []
-    for name in locations:
-        for root in config.locations[name]:
-            actual = translate_ledger_path(root)
-            if is_unmapped(actual) or not root_online(actual):
-                state["issues"].append({"message": "媒体来源离线", "location": name})
-                continue
-            online.append((name, root))
-            if selected is None and stage in {"all", "scan"}:
-                scan_location(db_path, name, root, declared_roots=config.locations, mounts=config.mounts)
+    online = _scan_online_roots(config, db_path, locations,
+        scan_files=selected is None and stage in {"all", "scan"}, issues=state["issues"])
     with database.read_connection() as connection:
         rows = [dict(row) for row in connection.execute("SELECT * FROM asset WHERE medium='video' AND disposal IS NULL")
                 if row["location"] in locations and (selected is None or row["id"] in selected)]
     state.update(stage="导入本地资料", total=len(rows))
     listings = {}
     for row in rows:
-        video = translate_ledger_path(row["path"])
         try:
-            if not any(row["location"] == name and (video == translate_ledger_path(root)
-                       or video.is_relative_to(translate_ledger_path(root))) for name, root in online):
-                continue
-            listing = listings.get(video.parent)
-            if listing is None:
-                listing = listings[video.parent] = SidecarIndex(directory_files(video.parent))
-            nfo, posters = listing.for_video(video)
-            payload = read_nfo(nfo)[0] if nfo else {}
-            code = normalise_code_key(row["code"] or release_code_from_filename(video.stem) or payload.get("id"))
-            if payload.get("id") and code and not same_release_code(code, payload["id"]):
-                raise ValueError("文件名与 NFO 番号冲突，请复核")
-            with database.write_transaction() as connection:
-                _import_nfo(connection, row, payload, code)
-            if payload:
-                state["identified"] += 1
-            artwork = local_art(video, payload)
-            artwork = artwork or next(iter(posters), None)
-            if artwork:
-                if not artwork.resolve().is_relative_to(video.parent.resolve()):
-                    raise ValueError("配套图片不在影片目录内")
-                if code and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}", code):
-                    raise ValueError("本地图片的作品编号格式无效")
-                target = Path(cover_root) / ((code or f"ASSET-ID-{row['id']}") + ".jpg")
-                state["covers"] += int(_copy_image(artwork, target))
+            _import_asset(database, cover_root, row, listings, online, state)
         except (OSError, ValueError, ET.ParseError) as error:
             state["issues"].append({"asset_id": row["id"], "message": str(error)})
         finally:

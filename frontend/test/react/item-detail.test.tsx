@@ -413,7 +413,8 @@ describe('写完之后', () => {
     expect(host.querySelector('#likeBtn')).not.toBeNull();
     expect(host.querySelector('#stageLater')).not.toBeNull();
     expect(host.querySelector('#addPlaylist')).not.toBeNull();
-    expect(host.querySelector('[data-kind="dispose"], [data-kind="seen"], #betterVersion, #preferenceToggle')).toBeNull();
+    expect(host.querySelector('[data-kind="seen"]')).not.toBeNull();
+    expect(host.querySelector('[data-kind="dispose"], #betterVersion, #preferenceToggle')).toBeNull();
   });
 
   it('删标签写进缓存；撤销加回来', async () => {

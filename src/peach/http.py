@@ -13,9 +13,12 @@ import re
 import socket
 import urllib.parse
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import TYPE_CHECKING, Mapping, Protocol
 
 import httpx
+
+if TYPE_CHECKING:
+    from curl_cffi import requests as curl_requests
 
 #: 只在本机或局域网里有意义的名字后缀。外面递进来的地址落到它们上，只可能是想让
 #: Peach 替人去探内网。

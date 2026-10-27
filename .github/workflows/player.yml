@@ -40,7 +40,7 @@ jobs:
           cache-dependency-glob: uv.lock
       - uses: FedericoCarboni/setup-ffmpeg@v3
         with:
-          ffmpeg-version: '9.0.1'
+          ffmpeg-version: release
       - run: uv sync --locked --all-extras
       - name: Windows 核心回归
         if: runner.os == 'Windows'
@@ -70,7 +70,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.0
       - uses: FedericoCarboni/setup-ffmpeg@v3
         with:
-          ffmpeg-version: '9.0.1'
+          ffmpeg-version: release
       - run: uv sync --locked --all-extras
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run typecheck

@@ -275,7 +275,7 @@ class MediaConfigurationTests(unittest.TestCase):
                 self.assertNotIn(internal, shown)
             with patch('peach.distribution.standalone', return_value=False):
                 self.assertEqual(_setup_destination(config, history_guide=False),
-                                 f'http://127.0.0.1:{config.server.port}/?onboarding=1')
+                                 f'http://127.0.0.1:{config.server.port}/settings/library')
             with patch('peach.distribution.standalone', return_value=True):
                 self.assertEqual(_setup_destination(config, history_guide=True),
-                                 f'http://127.0.0.1:{config.server.port}/taste?onboarding=1')
+                                 f'http://127.0.0.1:{config.server.port}/settings/library')

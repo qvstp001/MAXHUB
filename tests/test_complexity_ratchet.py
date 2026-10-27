@@ -53,7 +53,6 @@ BASELINE: dict[str, int] = {
     "src/peach/taste_history.py:_taste_analysis": 40,
     "src/peach/web_catalog.py:catalog_filter": 40,
     "scripts/audit_domain_codes.py:collect": 39,
-    "src/peach/web_catalog.py:q_items": 37,
     "scripts/harvest_social_avatars.py:harvest_entity": 37,
     "scripts/probe.py:run": 36,
     "scripts/merge_duplicate_identities.py:collect_repeated_projections": 34,
@@ -68,10 +67,10 @@ BASELINE: dict[str, int] = {
 #: 判过就该这么长的函数：`(分支数, 为什么拆开更差)`。键与 `BASELINE` 同形、不重叠。
 ACCEPTED: dict[str, tuple[int, str]] = {
     "src/peach/api.py:create_app": (
-        42, "应用工厂：按启动顺序构造数据库、各项后台服务（含可选分享）与路由并接成一个 app，每个可注入的"
+        39, "应用工厂：按启动顺序构造数据库、本地媒体服务与路由并接成一个 app，每个可注入的"
             "依赖各带一个缺省；挂载探测按配置状态启动。拆开会把同一条构造顺序分散到几处"),
     "src/peach/library_processing.py:process_library": (
-        47, "顺序流水线：本地资料、本地预览、联网采集、写候选、收尾共用一份进度状态"
+        44, "顺序流水线：本地资料、本地预览、联网采集、写候选、收尾共用一份进度状态"
             "与问题记录；来源扫描、资产查询与外部会话分别归 `_scan_sources`、"
             "`_collection_rows`、`_RemoteSession`，剩下的是任务编排与逐项目资料处理"),
     "src/peach/jav_cover_fetch.py:run": (

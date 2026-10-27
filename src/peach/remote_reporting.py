@@ -59,7 +59,7 @@ def _read(path, *, missing=None):
 
 
 def _consent(path):
-    value = _read(path, missing={"usage": True, "errors": True, "revision": "default"})
+    value = _read(path, missing={"usage": False, "errors": False, "revision": "default"})
     enabled = all(value.get(key) is True for key in FIELDS)
     return {"usage": enabled, "errors": enabled,
             "revision": str(value.get("revision", ""))}

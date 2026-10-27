@@ -5,8 +5,8 @@ import { overlayMatch } from '../../src/history/overlay';
 const page = (n: number, ids: string[], more = true): JavReviews => ({ ok: true, page: n, more,
   items: ids.map(id => ({ id, username: '示例用户', content: '示例评论', created_at: '' })) });
 describe('库外作品与评论身份', () => {
-  it('番号路由保持独立身份并拒绝路径片段', () => {
-    expect(overlayMatch('/works/EXM-001')?.target).toEqual({ kind: 'jav', code: 'EXM-001' });
+  it('前端仅打开本地资产覆盖层，番号地址由服务器解析', () => {
+    expect(overlayMatch('/works/EXM-001')).toBeNull();
     expect(overlayMatch('/works/../../file')).toBeNull();
     expect(overlayMatch('/assets/3')?.target).toEqual({ kind: 'item', id: 3 });
   });

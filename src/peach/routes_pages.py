@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 import re
 
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import (
@@ -143,9 +143,9 @@ def _access_on_by_default(asked) -> bool:
     return host_default == "2"
 
 
-def _setup_destination(config, *, history_guide: bool) -> str:
-    """完成页的入口：进馆藏，或者选了导入浏览器历史就先去口味页。都带 `onboarding=1`。"""
-    return _normal_url(config) + ('taste?onboarding=1' if history_guide else '?onboarding=1')
+def _setup_destination(config, *, history_guide: bool = False) -> str:
+    """完成设置后进入媒体库设置。"""
+    return _normal_url(config) + 'settings/library'
 
 
 def _normal_url(config) -> str:
@@ -334,7 +334,6 @@ def setup_questions(request: Request):
     只是不看 Origin：配置完成后这里 404，运行事实不再对外。
     """
     _setup_guard(request, submit=False)
-    from . import remote_reporting
     windows = os.name == "nt"
     asked = onboarding.questions(settings_file.active(), windows=windows)
     host_labels = dict(onboarding.HOST_OPTIONS)
@@ -371,7 +370,8 @@ def setup_questions(request: Request):
         "access_enabled": _access_on_by_default(asked),
         "scan_now": True,
         "history_guide": False,
-        "remote_reporting": remote_reporting.snapshot(),
+        "remote_reporting": {"usage": False, "errors": False, "available": False,
+                             "fields": [], "notice": ""},
     })
 
 
@@ -400,7 +400,7 @@ async def setup_submit_json(request: Request):
         raise HTTPException(status_code=400, detail="请求正文要是 JSON 对象")
     from . import remote_reporting
     try:
-        reporting = remote_reporting.parse_choices(body.get("remote_reporting", {}), partial=True)
+        remote_reporting.parse_choices(body.get("remote_reporting", {}), partial=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     rows = body.get("media_dir")
@@ -414,7 +414,6 @@ async def setup_submit_json(request: Request):
     submitted["media_root"] = [_json_text(row.get("root")) for row in rows]
     submitted["media_cost"] = [row.get("cost") for row in rows]
     scan_now = body.get("scan_now") is True
-    history_guide = body.get("history_guide") is True
     windows = os.name == "nt"
     answers, errors = _read_answers(settings_file.active(), submitted, windows=windows)
     from . import access
@@ -446,18 +445,18 @@ async def setup_submit_json(request: Request):
             errors = {"data_root": str(exc)}
     if errors:
         raise HTTPException(status_code=400, detail={"message": "有几项需要修改", "errors": errors})
-    remote_reporting.save(reporting, applied.config)
+    remote_reporting.save({"usage": False, "errors": False}, applied.config)
     if scan_now:
         onboarding.request_first_scan(applied.config, "configured" if answers.media_sources is not None else "local")
-    return _setup_done(applied.config, scan_now=scan_now, history_guide=history_guide)
+    return _setup_done(applied.config, scan_now=scan_now)
 
 
 def _setup_done(config, *, scan_now: bool = False, history_guide: bool = False, restored: bool = False):
-    destination = _setup_destination(config, history_guide=history_guide)
+    destination = _setup_destination(config)
     return JSONResponse({
         "url": destination,
         "scan_requested": scan_now,
-        "history_guide": history_guide,
+        "history_guide": False,
         "restored": restored,
         "standalone": distribution.standalone(),
         # 独立包的完成页过一会儿自己跳到入口；时长由前端定，与配置页保存后的跳转同一个数。

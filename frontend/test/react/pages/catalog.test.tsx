@@ -265,11 +265,11 @@ it('离开目录去管理区收起网格；去资料页、详情与沉浸不收'
   expect(actions.catalog?.release).toHaveBeenCalledTimes(1);
 });
 
-it('三个筛选态与垃圾文件的侧栏键与标签就是 `STATE_ROUTES` 与 `STATE_LABELS` 那一份', async () => {
+it('本地目录各筛选态的侧栏键与标签遵守同一份登记，回收站与首页按目录打开', async () => {
   const r = await load('/');
   for (const [key, path] of Object.entries(r.core.STATE_ROUTES)) {
     expect(r.routeMetaOf(path)).toEqual({ nav: key, title: r.core.STATE_LABELS[key] });
   }
-  expect(r.routeMetaOf('/trash')).toEqual({ section: 'trash' });
+  expect(r.routeMetaOf('/trash')).toEqual({});
   expect(r.routeMetaOf('/')).toEqual({});
 });

@@ -5,14 +5,12 @@ import io
 import json
 import sqlite3
 import tempfile
-import threading
 import unittest
 from collections import OrderedDict
 from contextlib import asynccontextmanager, closing
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
-from types import SimpleNamespace
 from urllib.parse import parse_qs, quote, urlsplit
 
 from peach import __version__
@@ -30,9 +28,7 @@ if HAS_DEPS:
     from starlette.routing import Mount
     from peach import api as api_module
     from peach import routes_auth
-    from peach import routes_jav_browser
     from peach.api import create_app
-    from peach.follow_covers import PLACEHOLDER_CONTENT_TYPE
     from peach.follow_secrets import credential_store_for
     from peach.config import PeachSettings
 

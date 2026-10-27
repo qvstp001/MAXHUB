@@ -1,7 +1,7 @@
 /* 路由树一面一层错误边界：某一面渲染抛错只空出那一面并撤掉它的登记，别的面与 `<Routes>` 照旧；
  * 错误经根的 `onCaughtError` 交给 `reportError`，每次一条；壳下次打开能重开。
  *
- * 首页新作行与垃圾队列的页面模块整个换掉，抛不抛、首屏取数成不成由 `pages` 当场决定：用例中途改它，就是
+ * 统计页的页面模块整个换掉，抛不抛、首屏取数成不成由 `pages` 当场决定：用例中途改它，就是
  * 「下一次打开换成好页面」。 */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,7 +9,6 @@ import { useLocation } from 'react-router';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 
 import type { CatalogFilterProps } from '../../src/react/catalog-filter/catalog-filter';
-import type { FeedNewProps } from '../../src/react/feed-new/feed-new';
 import type { ShellActions } from '../../src/react/router/shell-actions';
 import type { SearchApi, SearchProps } from '../../src/react/search/search';
 
@@ -21,24 +20,18 @@ const REACT_IMPORT_TIMEOUT_MS = 30_000;
 beforeAll(async () => { await import('../../src/react/router/router') }, REACT_IMPORT_TIMEOUT_MS);
 
 const pages = vi.hoisted(() => ({
-  feedBroken: false, junkBroken: false, feedPrefetchFails: false,
+  statsBroken: false, statsPrefetchFails: false,
 }));
 
-vi.mock('../../src/react/feed-new/feed-new-page', () => ({
-  FeedNewPage: () => {
-    if (pages.feedBroken) throw new Error('新作行画不出来');
-    return <p data-feed-good>新作</p>;
+vi.mock('../../src/react/stats/stats-page', () => ({
+  StatsPage: () => {
+    if (pages.statsBroken) throw new Error('统计页画不出来');
+    return <p data-stats-good>统计</p>;
   },
 }));
-vi.mock(import('../../src/react/feed-new/feed-new'), async (importOriginal) => ({
+vi.mock(import('../../src/react/stats/stats'), async (importOriginal) => ({
   ...(await importOriginal()),
-  prefetchFeedNew: async () => { if (pages.feedPrefetchFails) throw new Error('取数失败') },
-}));
-vi.mock('../../src/react/junk-queue/junk-queue-page', () => ({
-  JunkQueuePage: () => {
-    if (pages.junkBroken) throw new Error('垃圾队列画不出来');
-    return null;
-  },
+  prefetchStats: async () => { if (pages.statsPrefetchFails) throw new Error('取数失败') },
 }));
 
 /** 装载时停在沉浸地址上：页面组 `path="*"` 只在不归路由树画的地址上画出 `children`。 */
@@ -56,7 +49,7 @@ const unmounts: Array<() => void> = [];
 afterEach(async () => {
   for (const unmount of unmounts.splice(0)) await act(async () => { unmount() });
   document.body.innerHTML = '';
-  Object.assign(pages, { feedBroken: false, junkBroken: false, feedPrefetchFails: false });
+  Object.assign(pages, { statsBroken: false, statsPrefetchFails: false });
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -122,10 +115,6 @@ function filterProps(): CatalogFilterProps {
   };
 }
 
-function feedProps(host: HTMLElement, revision = 0): FeedNewProps {
-  return { host, revision, helpers: { feedRowHtml: () => '', wireFeedRow: vi.fn() }, actions: { settled: vi.fn() } };
-}
-
 function searchProps(exposed: { api: SearchApi | null }): SearchProps {
   const input = document.createElement('input');
   document.body.append(input);
@@ -153,89 +142,82 @@ async function openFilter(r: Loaded): Promise<HTMLElement> {
 
 it('页面内组件渲染抛错：只空那一面、撤掉登记、上报一次，另一面与整棵树照旧', async () => {
   const reported = watchReports();
-  pages.feedBroken = true;
+  pages.statsBroken = true;
   const r = await load();
   const tree = await mount(r);
   const filter = await openFilter(r);
-  const feed = container('feedNew');
+  const stats = container('stats');
   await act(async () => {
-    expect(await r.openManagedRoute('feed-new', feedProps(feed), { container: feed, isCurrent: always }),
+    expect(await r.openManagedRoute('/stats', {}, { container: stats, isCurrent: always }),
       '首帧抛错时打开照样回 true').toBe(true);
   });
 
-  expect(r.managedTaken(feed), '壳下次打开能重开').toBe(false);
-  expect(feed.childNodes.length, '坏的那一面连宿主一起撤掉').toBe(0);
-  expect(r.managedEntry(feed)).toBeNull();
+  expect(r.managedTaken(stats), '壳下次打开能重开').toBe(false);
+  expect(stats.childNodes.length, '坏的那一面连宿主一起撤掉').toBe(0);
+  expect(r.managedEntry(stats)).toBeNull();
   expect(r.managedEntries().map((entry) => entry.path)).toEqual(['catalog-filter']);
   expect(filter.querySelector(':scope > .peach-react [data-catalog-placeholder="performer"]'), '筛选条照画').not.toBeNull();
   expect(tree.querySelector('[data-marker]'), '整棵树没卸').not.toBeNull();
   expect(reported).toHaveBeenCalledTimes(1);
-  expect(reported).toHaveBeenCalledWith(expect.objectContaining({ message: '新作行画不出来' }));
+  expect(reported).toHaveBeenCalledWith(expect.objectContaining({ message: '统计页画不出来' }));
 });
 
 it('抛错之后推补丁是空操作；壳每重开一次再报一次，换成好页面就画上', async () => {
   const reported = watchReports();
-  pages.feedBroken = true;
+  pages.statsBroken = true;
   const r = await load();
   await mount(r);
-  const feed = container('feedNew');
-  const open = (revision: number) => r.openManagedRoute('feed-new', feedProps(feed, revision),
-    { container: feed, isCurrent: always });
-  await act(async () => { await open(0) });
+  const stats = container('stats');
+  const open = () => r.openManagedRoute('/stats', {}, { container: stats, isCurrent: always });
+  await act(async () => { await open() });
   expect(reported).toHaveBeenCalledTimes(1);
 
-  await act(async () => { r.updateManagedRoute(feed, { revision: 1 }) });
+  await act(async () => { r.updateManagedRoute(stats, { configurable: true }) });
   expect(reported, '没画上的容器推补丁不重画').toHaveBeenCalledTimes(1);
-  await act(async () => { await open(2) });
+  await act(async () => { await open() });
   expect(reported, '确定性抛错每重开一次报一次').toHaveBeenCalledTimes(2);
 
-  pages.feedBroken = false;
-  await act(async () => { expect(await open(3)).toBe(true) });
-  expect(feed.querySelector(':scope > .peach-react [data-feed-good]')).not.toBeNull();
-  expect(r.managedTaken(feed)).toBe(true);
+  pages.statsBroken = false;
+  await act(async () => { expect(await open()).toBe(true) });
+  expect(stats.querySelector(':scope > .peach-react [data-stats-good]')).not.toBeNull();
+  expect(r.managedTaken(stats)).toBe(true);
   expect(reported).toHaveBeenCalledTimes(2);
 });
 
 it('首屏取数失败不是渲染错误：照画、不上报', async () => {
   const reported = watchReports();
-  pages.feedPrefetchFails = true;
+  pages.statsPrefetchFails = true;
   const r = await load();
   await mount(r);
-  const feed = container('feedNew');
+  const stats = container('stats');
   await act(async () => {
-    expect(await r.openManagedRoute('feed-new', feedProps(feed), { container: feed, isCurrent: always })).toBe(true);
+    expect(await r.openManagedRoute('/stats', {}, { container: stats, isCurrent: always })).toBe(true);
   });
-  expect(feed.querySelector(':scope > .peach-react [data-feed-good]')).not.toBeNull();
-  expect(r.managedTaken(feed)).toBe(true);
+  expect(stats.querySelector(':scope > .peach-react [data-stats-good]')).not.toBeNull();
+  expect(r.managedTaken(stats)).toBe(true);
   expect(reported).not.toHaveBeenCalled();
 });
 
-it('一页抛错：四座页面内组件照画，后退前进照旧跟着走', async () => {
+it('一页抛错：筛选与搜索照画，后退前进照旧跟着走', async () => {
   const reported = watchReports();
-  pages.junkBroken = true;
+  pages.statsBroken = true;
   const r = await load();
   const tree = await mount(r);
   const filter = await openFilter(r);
-  const feed = container('feedNew');
-  const notice = container('libraryProcessingNotice');
   const menu = container('searchMenu');
   const exposed: { api: SearchApi | null } = { api: null };
   await act(async () => {
-    await r.openManagedRoute('feed-new', feedProps(feed), { container: feed, isCurrent: always });
-    await r.openManagedRoute('library-processing', { toast: vi.fn(), mode: 'notice' }, { container: notice, isCurrent: always });
     await r.openManagedRoute('search', searchProps(exposed), { container: menu, isCurrent: always });
   });
-  const grid = container('grid');
-  await act(async () => { await r.openManagedRoute('/junk-files', {}, { container: grid, isCurrent: always }) });
+  const stats = container('stats');
+  await act(async () => { await r.openManagedRoute('/stats', {}, { container: stats, isCurrent: always }) });
 
-  expect(grid.childNodes.length).toBe(0);
-  expect(r.managedTaken(grid)).toBe(false);
+  expect(stats.childNodes.length).toBe(0);
+  expect(r.managedTaken(stats)).toBe(false);
   expect(reported).toHaveBeenCalledTimes(1);
   expect(r.managedEntries().map((entry) => entry.path).sort())
-    .toEqual(['catalog-filter', 'feed-new', 'library-processing', 'search']);
+    .toEqual(['catalog-filter', 'search']);
   expect(filter.querySelector('[data-catalog-placeholder="performer"]')).not.toBeNull();
-  expect(feed.querySelector('[data-feed-good]')).not.toBeNull();
-  expect(notice.querySelector(':scope > .peach-react')).not.toBeNull();
   expect(menu.querySelector(':scope > .peach-react')).not.toBeNull();
   expect(exposed.api).not.toBeNull();
   expect(tree.querySelector('[data-marker]')).not.toBeNull();

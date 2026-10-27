@@ -6,6 +6,8 @@
 
 依赖精简以已有镜像层与 Python 导入链为依据：OpenCV、NumPy、人脸模型、云下载、浏览器历史与爬虫专用依赖不在默认环境中。测试仍可安装开发依赖覆盖历史代码；运行镜像仅使用锁定的默认依赖。无新增外部实现、库或版本。
 
+播放器 CI 沿用 `FedericoCarboni/setup-ffmpeg@v3` 的官方 `release` 工具渠道，输入契约见其 [action.yml](https://github.com/FedericoCarboni/setup-ffmpeg/blob/v3/action.yml)。工具服务只接受当前可下载制品，固定到已撤下的制品版本会在运行测试前失败；Docker 运行镜像仍使用 Debian 的 FFmpeg，Windows 发行源码清单不受此测试工具选择影响。
+
 Debian FFmpeg 的设备层经 SDL/OpenGL 依赖 Mesa、LLVM；因此保留经过现有播放回退验证的 FFmpeg 软件栈，不通过删除共享库缩减镜像。独立无界面 FFmpeg 构建尚未验证，不作为本次正式路径。Emby 仅用于表达媒体库浏览与播放的产品方向；其界面实测证据未取得，未复制 Emby 布局或源码。
 
 ## 检查输入与源码文案

@@ -1,8 +1,8 @@
-/* 页面里的页面内组件由路由树画（`SURFACE_ROUTES`）：首页筛选条、首页新作行、目录页处理横幅与顶栏搜索下拉按名字
- * 登记，壳经 `openManagedRoute` 开、`updateManagedRoute` 推、`releaseManagedRoute` 收，各画进自己的容器。
+/* 路由树按登记渲染统计页与搜索下拉：壳经 `openManagedRoute` 开、`updateManagedRoute` 推、
+ * `releaseManagedRoute` 收，各画进自己的容器。
  * 路由树接上之前打开的那一面等它接上再画；首屏取齐才换掉壳铺的骨架；首屏在途时容器已归路由树。
  *
- * 各面自己的内容与时序由 `library-processing.test.tsx`、`search.test.tsx` 等管，这里看的是路由树这一层。 */
+ * 各面自己的内容由 `stats.test.tsx`、`search.test.tsx` 等管，这里看的是路由树这一层。 */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
@@ -18,6 +18,8 @@ const REACT_IMPORT_TIMEOUT_MS = 30_000;
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeAll(async () => { await import('../../src/react/router/router') }, REACT_IMPORT_TIMEOUT_MS);
+
+vi.mock('../../src/react/stats/stats-page', () => ({ StatsPage: () => <p data-stats-page>统计</p> }));
 
 async function load() {
   vi.resetModules();
@@ -101,7 +103,7 @@ it('路由树接上之前打开的搜索下拉等着，不动容器；接上那�
   const exposed: { api: SearchApi | null } = { api: null };
   const opening = r.openManagedRoute('search', searchProps(exposed), { container: menu, isCurrent: () => true });
   expect(preload, '第一次打开当场发出 React 包的请求，不等 loadRouter').toHaveBeenCalledTimes(1);
-  void r.openManagedRoute('library-processing', { toast: vi.fn() }, { container: container('y'), isCurrent: () => true });
+  void r.openManagedRoute('/stats', {}, { container: container('y'), isCurrent: () => true });
   r.releaseManagedRoute(document.getElementById('y')!);
   expect(preload, '装载入口只调一次').toHaveBeenCalledTimes(1);
   await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 0) }) });
@@ -117,13 +119,13 @@ it('路由树接上之前打开的搜索下拉等着，不动容器；接上那�
   expect(r.managedEntry(menu)?.path).toBe('search');
 });
 
-it('处理横幅取齐首屏才换掉骨架；首屏在途时容器已归路由树', async () => {
+it('统计页取齐首屏才换掉骨架；首屏在途时容器已归路由树', async () => {
   const fetch = deferredFetch({ status: 'idle' });
   fetch.install();
   const r = await load();
   await mount(r);
-  const el = container('libraryProcessing');
-  const opening = r.openManagedRoute('library-processing', { toast: vi.fn() }, { container: el, isCurrent: () => true });
+  const el = container('stats');
+  const opening = r.openManagedRoute('/stats', {}, { container: el, isCurrent: () => true });
   await until(() => fetch.fetched.mock.calls.length > 0, '取数发出去');
   expect(r.managedTaken(el)).toBe(true);
   expect(el.querySelector('[data-skeleton]'), '数据还没回来就撤骨架会出现第二段等待态').not.toBeNull();
@@ -131,7 +133,7 @@ it('处理横幅取齐首屏才换掉骨架；首屏在途时容器已归路由�
   await act(async () => { await opening });
   expect(el.querySelector('[data-skeleton]')).toBeNull();
   // token、Preflight 与焦点规则都作用在 `.peach-react` 上，页面不画在它里面就没有样式。
-  expect(el.querySelector('.peach-react')?.textContent).toContain('同步媒体库');
+  expect(el.querySelector('.peach-react [data-stats-page]')?.textContent).toBe('统计');
 });
 
 it('取数期间壳已换页就不画，骨架留给下一页', async () => {
@@ -139,9 +141,9 @@ it('取数期间壳已换页就不画，骨架留给下一页', async () => {
   fetch.install();
   const r = await load();
   await mount(r);
-  const el = container('libraryProcessingNotice');
+  const el = container('stats');
   let current = true;
-  const opening = r.openManagedRoute('library-processing', { toast: vi.fn(), mode: 'notice' },
+  const opening = r.openManagedRoute('/stats', {},
     { container: el, isCurrent: () => current });
   await until(() => fetch.fetched.mock.calls.length > 0, '取数发出去');
   current = false;
@@ -157,8 +159,8 @@ it('收起时中止在途取数；画过的话连宿主一起撤掉', async () =
   fetch.install();
   const r = await load();
   await mount(r);
-  const el = container('libraryProcessingNotice');
-  const opening = r.openManagedRoute('library-processing', { toast: vi.fn() }, { container: el, isCurrent: () => true });
+  const el = container('stats');
+  const opening = r.openManagedRoute('/stats', {}, { container: el, isCurrent: () => true });
   await until(() => fetch.fetched.mock.calls.length > 0, '取数发出去');
   r.releaseManagedRoute(el);
   await act(async () => { expect(await opening).toBe(false) });
@@ -167,7 +169,7 @@ it('收起时中止在途取数；画过的话连宿主一起撤掉', async () =
 
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ status: 'idle' }) })));
   await act(async () => {
-    await r.openManagedRoute('library-processing', { toast: vi.fn() }, { container: el, isCurrent: () => true });
+    await r.openManagedRoute('/stats', {}, { container: el, isCurrent: () => true });
   });
   expect(r.managedTaken(el)).toBe(true);
   await act(async () => { r.releaseManagedRoute(el) });
