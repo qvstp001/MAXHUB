@@ -22,7 +22,6 @@ import { IDENTITY_ROW_CLASS } from '../../identity-filter';
 import { BoardTabs, type BoardTab } from '../components/board-tabs';
 import { EmptyState } from '../components/empty-state';
 import { LibraryShortcuts } from '../library-shortcuts/shortcut-controls';
-import { PerformerScrapeControls } from '../performer-scrape/performer-scrape';
 import { LoadingDots } from '../components/loading-dots';
 import { SEGMENTED_TRACK, SEGMENT_ICON, SegmentedRadioGroup as RadioGroup } from '../components/segmented';
 import { spriteGlyph } from '../components/sprite-glyph';
@@ -184,7 +183,7 @@ export function IndexPage(props: IndexProps) {
   const changeLayout = (next: PeopleLayout) => { setLayout(next); props.savePreference({ layout: next }) };
 
   const tabs = kind === 'tags'
-    ? <BoardTabs tabs={SCOPE_TABS} value={scope} label="词表" onChange={(next) => {
+    ? <BoardTabs tabs={SCOPE_TABS.filter(({value}) => value === 'local')} value={scope} label="词表" onChange={(next) => {
       setPicked(new Set());
       // 在线标签全是英文，字母表才是它的形态；切过去时顺手换上，不必再点一次。
       go({ scope: next, category: 'all', view: next === 'online' ? 'alphabet' : view });
@@ -249,9 +248,8 @@ export function IndexPage(props: IndexProps) {
         <span aria-hidden className="hidden h-0 basis-full max-board-narrow:order-2 max-board-narrow:block" />
         <IndexSearch label={`过滤${title}`} value={q} onQuery={(next) => { if (next !== q) go({ q: next }, !!next) }} />
       </div>
-      {kind === 'performers' && scope === 'local' ? <div className="mb-5"><PerformerScrapeControls /></div> : null}
       {kind === 'performers' || kind === 'creators' ? (
-        <BoardTabs tabs={PEOPLE_TABS} value={onlineAuthors ? 'online' : kind} label="人物名册"
+        <BoardTabs tabs={PEOPLE_TABS.filter(({value}) => value !== 'online')} value={onlineAuthors ? 'online' : kind} label="人物名册"
           onChange={(next) => {
             if (next === 'online') props.exitSelectMode();
             go({ kind: next === 'online' ? 'performers' : next,

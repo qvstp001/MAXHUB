@@ -12,7 +12,6 @@ import { releaseHoverPreviews } from '../card-art';
 import { releaseAllManagedRoutes } from '../history';
 import { RouterRoot, ROUTER_ROOT_OPTIONS } from './router/router';
 import type { ShellActions } from './router/shell-actions';
-import { ResultUpdates } from './result-updates';
 
 interface ApplicationResources { effects: ApplicationEffects; owners: number }
 let resources: ApplicationResources | null = null;
@@ -57,7 +56,7 @@ export function Application() {
       queueMicrotask(() => finalizeResources(current));
     };
   }, []);
-  return <RouterRoot actions={actions} processing background={actions ? <ResultUpdates /> : null} />;
+  return <RouterRoot actions={actions}  />;
 }
 const roots = new WeakMap<Element, Root>();
 export function mountApplication(host: Element): Root {

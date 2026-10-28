@@ -10,6 +10,7 @@ import importlib.util
 import io
 import ntpath
 import os
+import sys
 import sqlite3
 import tempfile
 import unittest
@@ -477,12 +478,13 @@ class SetupJsonContractTests(_SetupHttpCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
-    def test_remote_reporting_defaults_on_and_opt_out_is_saved_in_selected_data_root(self):
+    def test_setup_keeps_remote_reporting_disabled_in_selected_data_root(self):
         from peach import remote_reporting
         response = self._send("GET", self.QUESTIONS)
-        self.assertTrue(response.json()["remote_reporting"]["usage"])
-        self.assertTrue(response.json()["remote_reporting"]["errors"])
-        self._submit(remote_reporting={"usage": False, "errors": False})
+        self.assertFalse(response.json()["remote_reporting"]["usage"])
+        self.assertFalse(response.json()["remote_reporting"]["errors"])
+        self.assertFalse(response.json()["remote_reporting"]["available"])
+        self._submit(remote_reporting={"usage": True, "errors": True})
         config = settings_file.load_config(environ={"PEACH_DATA_ROOT": str(self.data_root)})
         self.assertFalse(remote_reporting.consent(config)["usage"])
         self.assertFalse(remote_reporting.consent(config)["errors"])
@@ -647,7 +649,9 @@ class SetupJsonContractTests(_SetupHttpCase):
             self.assertEqual(len(by_key["media_dir"]["help"]), 1)
         else:
             self.assertIsNone(data["media_root"])
-            self.assertIn("本机文件夹是这台电脑读取媒体的位置", by_key["media_dir"]["help"][-1])
+            expected_help = ("Docker 部署填写容器内目录" if sys.platform == "linux"
+                             else "填写这台设备实际读取媒体的文件夹")
+            self.assertIn(expected_help, by_key["media_dir"]["help"][-1])
         self.assertEqual(data["cloud"]["link"]["url"], "https://www.clouddrive2.com/help.html")
         # 默认对局域网开放，所以访问密码开关第一次出现就开着；扫描默认勾上，导入历史默认不勾。
         self.assertEqual((data["access_enabled"], data["scan_now"], data["history_guide"]), (True, True, False))
@@ -812,7 +816,7 @@ class SetupJsonContractTests(_SetupHttpCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
         data = response.json()
         self.assertEqual({key: data[key] for key in ("url", "scan_requested", "history_guide", "standalone", "redirect")},
-                         {"url": "http://127.0.0.1:8900/?onboarding=1", "scan_requested": True,
+                         {"url": "http://127.0.0.1:8900/settings/library", "scan_requested": True,
                           "history_guide": False, "standalone": False, "redirect": None})
         self.assertEqual([row["term"] for row in data["facts"]],
                          [row["term"] for row in runtime_fact_entries(self._loaded())])
@@ -822,15 +826,18 @@ class SetupJsonContractTests(_SetupHttpCase):
         self.assertEqual(policy["mode"], "password")
         self.assertNotIn("correct-password", response.text, "回话里不带密码")
 
-    def test_the_history_guide_without_a_scan_leads_to_the_taste_page(self):
-        with mock.patch('peach.web_stats.w_taste_refresh') as refresh:
-            response = self._send("POST", self.SUBMIT, json=self._body(scan_now=False, history_guide=True))
+    def test_setup_with_history_guide_enters_library_settings_without_collecting_history(self):
+        with mock.patch('peach.web_stats.w_taste_refresh') as refresh, \
+                mock.patch('peach.remote_reporting._new_client') as remote_client:
+            response = self._send("POST", self.SUBMIT, json=self._body(scan_now=False, history_guide=True,
+                remote_reporting={"usage": True, "errors": True}))
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()
         self.assertEqual((data["url"], data["scan_requested"], data["history_guide"], data["redirect"]),
-                         ("http://127.0.0.1:8900/taste?onboarding=1", False, True, None))
+                         ("http://127.0.0.1:8900/settings/library", False, False, None))
         self.assertFalse((self.data_root / "state" / onboarding.SCAN_REQUEST_NAME).exists())
         refresh.assert_not_called()
+        remote_client.assert_not_called()
 
     def test_the_standalone_package_is_told_to_redirect_to_the_entry_address(self):
         with mock.patch.object(distribution, "standalone", return_value=True):
@@ -839,7 +846,7 @@ class SetupJsonContractTests(_SetupHttpCase):
         data = response.json()
         self.assertEqual((data["standalone"], data["scan_requested"], data["history_guide"]), (True, True, False))
         self.assertEqual(data["redirect"], data["url"])
-        self.assertEqual(data["url"], "http://127.0.0.1:8900/?onboarding=1")
+        self.assertEqual(data["url"], "http://127.0.0.1:8900/settings/library")
 
 
 class StandaloneConfigurationTests(_Case):

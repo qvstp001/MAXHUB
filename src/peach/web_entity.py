@@ -14,8 +14,7 @@ import time
 
 from urllib.parse import urlsplit
 
-from . import (company_profiles, entry_links, feeds, link_status, performer_header, web_feeds,
-               web_follow)
+from . import company_profiles, entry_links, link_status, performer_header
 from .catalog_rules import (LENGTH_TAGS, dir_expr, photo_set_title, solo_performer_clause, tag_cat)
 from .entities import normalize_entity_name, resolve_entity, resolve_entity_id, rewrite_flat_projection
 from .social_links import ARCHIVE_HOSTS, is_archive
@@ -161,7 +160,7 @@ def _performer_entries(contract: WebContract, c, d: dict, alias_rows) -> dict:
         contract.entry_links_root, d["canonical_name"], d["external_refs"], alias_rows,
         localization)}
     if entry_links.javdb_actor_pages(d["canonical_name"], d["external_refs"]):
-        out["feed"] = {"following": feeds.entity_following(c, d["id"])}
+        out["feed"] = {"following": False}
     return out
 
 
@@ -277,7 +276,7 @@ def q_entity(contract: WebContract, args):
         elif kind in {'studio', 'agency'}:
             d['company_profile'] = company_profiles.public_profile(metadata)
         # 创作者在关注里的那一面（ADR-0096）：绑在名下的来源和同名等确认的那几组。
-        d["follow"] = web_follow.entity_follow(contract, c, d["id"]) if kind == "creator" else None
+        d["follow"] = None
         scope = scope_predicate(kind, "ae.entity_id") + _tag_scope_visibility(kind, "ae.entity_id", "a.id")
         count, rep = c.execute(
             "SELECT count(DISTINCT " + video_work_key(contract, c) + "),"
@@ -396,8 +395,7 @@ def agency_mark_link(links: list[dict]) -> int | None:
 def _entity_shape_parts(contract, connection, entity_id: int | None = None) -> dict[int, list[str]]:
     """实体页形状的判据；深链只查询地址上的实体。"""
     scope = (entity_id,) if entity_id is not None else ()
-    parts = {key: ["feed"] for key in web_feeds.feed_row_entity_ids(contract, connection)
-             if entity_id is None or key == entity_id}
+    parts = {}
     for row in connection.execute(
             "SELECT DISTINCT scope.entity_id FROM asset_entity scope"
             " JOIN entity e ON e.id=scope.entity_id AND e.kind<>'agency'"
@@ -444,7 +442,7 @@ def _read_entity_shapes(contract) -> dict:
     名单放在服务端，几台设备看到的是同一份。页面按地址里的名字比对，所以别名一起给。
     """
     with contract.database.read_connection() as connection:
-        home = {"feed": web_feeds.home_has_feed(contract, connection)}
+        home = {"feed": False}
         parts = _entity_shape_parts(contract, connection)
         entities = {int(row["id"]): {"id": int(row["id"]), "kind": row["kind"],
                                      "names": [row["canonical_name"]], "parts": parts[int(row["id"])]}
@@ -630,12 +628,8 @@ def q_photo_set(contract: WebContract, args):
 
 def _attach_index_following(connection, rows: list[dict]) -> None:
     """名册人物的订阅状态按已启用、绑定实体的来源汇总。"""
-    following = {source[0] for source in connection.execute(
-        "SELECT entity_id FROM feed_source WHERE kind=? AND enabled=1 "
-        "UNION SELECT entity_id FROM follow_source WHERE enabled=1",
-        (feeds.KIND_JAVDB_ACTOR,))}
     for row in rows:
-        row['following'] = row['entity_id'] in following
+        row['following'] = False
 
 
 def _attach_index_favorites(connection, rows: list[dict]) -> None:

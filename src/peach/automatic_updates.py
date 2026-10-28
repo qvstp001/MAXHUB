@@ -5,7 +5,6 @@ import json
 import time
 from pathlib import Path
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from filelock import FileLock, Timeout
 
 from . import distribution, release_updates, standalone_update
@@ -16,7 +15,7 @@ class AutomaticUpdates:
     def __init__(self, root: Path, *, available: bool):
         self.path = root / "automatic-updates.json"
         self.available = available
-        self.scheduler = BackgroundScheduler(timezone="UTC", daemon=True)
+        self.scheduler = None
 
     def read(self) -> dict:
         try:
@@ -102,9 +101,11 @@ class AutomaticUpdates:
 
     def start(self) -> None:
         if self.available:
+            from apscheduler.schedulers.background import BackgroundScheduler
+            self.scheduler = BackgroundScheduler(timezone="UTC", daemon=True)
             self.scheduler.add_job(self.tick, "interval", seconds=60, max_instances=1, coalesce=True)
             self.scheduler.start()
 
     def stop(self) -> None:
-        if self.scheduler.running:
+        if self.scheduler is not None and self.scheduler.running:
             self.scheduler.shutdown(wait=False)

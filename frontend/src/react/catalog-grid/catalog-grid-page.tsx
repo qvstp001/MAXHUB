@@ -25,7 +25,6 @@ import {
 import type { CatalogGridProps, MediaCardLayout, MediaCardHelpers, MediaItem, MediaPage } from './types';
 import { VideoWall } from '../video-wall/video-wall';
 import { finiteWallFilters, wallHasCover } from '../video-wall/wall-layout';
-import { LibraryCompletionPrompt, missingPreviewIds } from '../library-processing/library-completion';
 import { useCatalogView } from './catalog-view';
 import { CatalogListPage } from './catalog-list-page';
 
@@ -94,8 +93,6 @@ function GridBody(props: CatalogGridProps) {
   const wallAvailable = !trash && !props.selectMode && !!actions.wallPlayer && !!actions.wallDetails;
   const wallItems = tiles.flatMap(tile => tile.kind === 'card' && wallHasCover(tile.item) ? [tile.item] : []);
   const wallPool = wallItems;
-  const missing = trash ? [] : missingPreviewIds(
-    tiles.flatMap(tile => tile.kind === 'card' ? [tile.item] : []), layout.javImage);
 
   const reveal = useSkeletonReveal(result.isPending, props.skeletonHtml);
   const body = useRef<HTMLDivElement | null>(null);
@@ -179,7 +176,6 @@ function GridBody(props: CatalogGridProps) {
   return (
     <div ref={body} data-media-body="" data-grid-reveal={reveal.fading ? '' : undefined}>
       {!props.wall && reveal.layer}
-      <LibraryCompletionPrompt assetIds={missing} />
       {content()}
     </div>
   );

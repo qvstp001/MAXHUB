@@ -1,7 +1,7 @@
 /* feed 域控制器：本域状态与动作，启动由 Application 的生命周期统一安装。 */
 import { coverImage } from './../card-art/markup';
 import { feedIdentity } from './../card-art/feed-identity';
-import { $, api, esc, foldName, icon, isCatalogPath } from '../core';
+import { $, api, esc, foldName, icon } from '../core';
 import { javTitleHtml } from '../core/jav-title';
 import { COVER_FRONT_RATIO } from './../appearance/layout';
 import { catalogState } from './catalog.js';
@@ -97,7 +97,7 @@ export function wireFeedNewRow(row){
   if(preferencesState.appSettings.feedAutoScroll)wireAutoScroll(row);
 }
 
-export function isFeedNewPath(path){return isCatalogPath(path)&&path!=='/junk-files'}
+export function isFeedNewPath(){return false}
 
 
 export function renderHomeFeed(){

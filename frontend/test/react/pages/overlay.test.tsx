@@ -124,12 +124,10 @@ it('后退前进落到覆盖地址上接上背景并打开；没有请求的认�
   expect(opened, '认领条目没有打开请求时不会重开舞台').toEqual([]);
   await pop('/assets/8', entry(over('/nowhere', 'item', '?q=1'), 'a'));
   await pop('/assets/4?mix=3', entry(over('/nowhere'), 'b'));
-  await pop('/posts/5', entry(over('/nowhere', 'follow'), 'c'));
   await pop('/assets/9?playlist=2', entry(over('/nowhere'), 'd'));
   expect(opened).toEqual([
     { target: { kind: 'item', id: 8 }, from: '/nowhere?q=1' },
     { target: { kind: 'queue', queue: 'mix', key: 3, item: 4 }, from: '/nowhere' },
-    { target: { kind: 'follow', id: 5 }, from: '/nowhere' },
     { target: { kind: 'queue', queue: 'playlist', key: 2, item: 9 }, from: '/nowhere' },
   ]);
   expect(actions.closeStage, '覆盖之间换来换去不收舞台').not.toHaveBeenCalled();
@@ -186,15 +184,16 @@ it('深链 `/assets/:id`：壳开始路由之前只挂着，那一刻打开那�
   expect(opened).toHaveLength(1);
 });
 
-it('深链 `/posts/:id`：打开那一条，只让出 `#stats`、不挂列表也不补画目录', async () => {
-  const r = await load('/posts/5');
+it.each(['/posts/5', '/works/ABC-123'])('深链 %s 不作为本地播放器的详情覆盖层', async path => {
+  const r = await load(path);
   const { actions, opened } = shellActions(r);
   await mount(r, actions);
   await start(r);
-  expect(opened).toEqual([{ target: { kind: 'follow', id: 5 }, from: null }]);
-  expect(actions.follow!.ground).toHaveBeenCalledTimes(1);
+  expect(opened).toEqual([]);
+  expect(actions.follow!.ground).not.toHaveBeenCalled();
   expect(actions.follow!.refresh).not.toHaveBeenCalled();
   expect(actions.catalog!.fill).not.toHaveBeenCalled();
+  expect(r.overlayTarget(path)).toBeNull();
 });
 
 it('路由根晚于壳开始路由才挂上：挂上就打开启动那一条，只开一次', async () => {

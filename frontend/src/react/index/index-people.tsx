@@ -6,10 +6,8 @@
  * `web/css/01-base.css` 的 `[data-person-ring]`，量图的是 `installCardArt` 挂在文档上的 `load` 监听。
  * 格底、头像框、首字与读数的配色在同目录的 `index-people.css`。 */
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { Chip } from '@/components/base/badges/chip';
 
 import { cardClass } from '../components/card';
-import { spriteGlyph } from '../components/sprite-glyph';
 import type { OnlineAuthor } from '../follow/online-vocab';
 import { ENTITY_KINDS, isCompany, personReadout, type IndexKind, type IndexPerson, type IndexProps, type PeopleLayout } from './index-data';
 
@@ -32,11 +30,10 @@ function Ring({ html, face, company, big }: { html: string; face?: string; compa
 }
 
 const CELL = 'relative flex cursor-pointer flex-col gap-2 p-3 text-inherit';
-const Rss = spriteGlyph('rss');
 
 function Cell(
-  { name, readout, big, children, following, onPress, ...data }:
-  { name: string; readout: string; big: boolean; children: ReactNode; following?: boolean; onPress(): void }
+  { name, readout, big, children, onPress, ...data }:
+  { name: string; readout: string; big: boolean; children: ReactNode; onPress(): void }
     & Record<`data-${string}`, string>,
 ) {
   return (
@@ -46,9 +43,6 @@ function Cell(
         className: `${CELL} ${big ? 'items-stretch text-left' : 'items-center text-center'}`,
       })}>
       {children}
-      {following ? <span data-index-feed="" role="img" aria-label="已订阅新作" className="absolute top-4 right-4 z-2 inline-flex">
-        <Chip variant="caption" color="blue"><Rss /></Chip>
-      </span> : null}
       <span data-index-name="" className="text-body-medium wrap-anywhere text-text-primary">{name}</span>
       <span data-index-readout="" className="text-caption-1-regular">{readout}</span>
     </button>
@@ -73,7 +67,7 @@ export function PeopleGrid(
         const avatar = props.personAvatar(item, entityKind, big);
         return (
           <Cell key={`${entityKind}:${item.entity_id || item.k}`} data-k={item.k} data-kind={entityKind} name={item.k} readout={`${personReadout(kind, item)}${item.identity_labels?.length ? ' · ' + item.identity_labels.join(' / ') : ''}`}
-            big={big} following={item.following} onPress={() => props.openEntity(entityKind, item.k)}>
+            big={big} onPress={() => props.openEntity(entityKind, item.k)}>
             <Ring html={avatar.html} face={avatar.face} company={company} big={big} />
           </Cell>
         );

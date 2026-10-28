@@ -11,12 +11,12 @@
  * 骨架与整页一次换掉；页内换筛选时作品区的骨架归正文那一格自己（`useSkeletonReveal`）。 */
 import { api } from '@peach/legacy/core';
 
+import type { FeedRowHtml } from '../feed-new/feed-new';
 import type { CatalogGridProps, MediaPage } from '../catalog-grid/types';
 import type { EntityBodyActions, EntityBodyHelpers, EntityCodeSet, EntityLocalPhoto, PhotoLayout, PhotoSize } from '../entity-body/entity-body';
 import type { EntityComboItem, EntitySortKey, EntityView, SegmentOption } from '../entity-filter/entity-filter';
 import type { FollowFeedActions, FollowFeedHelpers } from '../follow-feed/follow-feed';
 import type { EntityHeroData, HeroCostar } from '../entity-hero/entity-hero';
-import { feedNewKey, feedNewOptions, type FeedRowHtml } from '../feed-new/feed-new';
 import type { IndexPerson, PeopleLayout } from '../index/index-data';
 import { queryClient } from '../query';
 
@@ -271,11 +271,7 @@ export async function prefetchEntityPage(props: EntityPageProps): Promise<void> 
   }
   if (props.resolvedEntity?.id) queryClient.setQueryData(entityKey(kind, name), props.resolvedEntity);
   await Promise.all([
-    queryClient.fetchQuery(entityOptions(kind, name)).then((entity) => {
-      if (!entity || entity.error || !entity.id) return null;
-      queryClient.removeQueries({ queryKey: feedNewKey(Number(entity.id)) });
-      return queryClient.fetchQuery(feedNewOptions(Number(entity.id), props.helpers.feedRowHtml, true));
-    }),
+    queryClient.fetchQuery(entityOptions(kind, name)),
     queryClient.fetchQuery(itemsOptions(props)),
     queryClient.fetchInfiniteQuery(photosOptions(kind, name, 0, '')),
     props.media.media === 'photos' && props.media.set

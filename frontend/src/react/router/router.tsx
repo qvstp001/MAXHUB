@@ -34,13 +34,12 @@ import {
 } from '@peach/history';
 
 import { Providers } from '../providers';
-import { LibraryProcessingDock } from '../library-processing/library-processing-dock';
 import { SettingsMatch } from './pages/settings';
 import {
   BROWSE_ROUTES, CATALOG_PATHS, CATALOG_ROUTES, ENTITY_ROUTES, IMMERSE_ROUTES, INDEX_ROUTES, MANAGED_ROUTES, REDIRECT_ROUTES,
   isManagedPath, isRoutedPath, managedPage,
 } from './managed-routes';
-import { FollowDetailGround, OverlayMatch, QueueRequests } from './pages/overlay';
+import { OverlayMatch, QueueRequests } from './pages/overlay';
 import type { ShellActions } from './shell-actions';
 
 /* 页面打开序号（`@peach/history` 的 `openEpoch`）：没人认领的历史变化各领一个，认领的写地址不领。地址没变的
@@ -188,9 +187,8 @@ function RouteGroups({ children }: { children?: ReactNode }) {
 
 
         {/* ── 没有背景的覆盖地址 ── 作品与队列挂目录元素，补画网格；关注详情只让出 `#stats`。 */}
-        {OVERLAY_PATHS.map((path) => (
-          <Route key={path} path={path} element={path === '/works/:code' ? null
-            : path === '/posts/:id' ? <FollowDetailGround /> : CATALOG_ROUTES['/'].element} />
+        {OVERLAY_PATHS.filter(path => path === '/assets/:id').map((path) => (
+          <Route key={path} path={path} element={CATALOG_ROUTES['/'].element} />
         ))}
         {PREFERENCE_PATHS.map(path => <Route key={path} path={path} element={null} />)}
 
@@ -204,7 +202,7 @@ function RouteGroups({ children }: { children?: ReactNode }) {
 
       {/* ── 覆盖 ── */}
       <Routes location={settingsBackground ?? location}>
-        {OVERLAY_PATHS.map((path) => <Route key={path} path={path} element={<OverlayMatch path={path} />} />)}
+        {OVERLAY_PATHS.filter(path => path === '/assets/:id').map((path) => <Route key={path} path={path} element={<OverlayMatch path={path} />} />)}
         <Route path="*" element={null} />
       </Routes>
       <Routes>
@@ -216,7 +214,7 @@ function RouteGroups({ children }: { children?: ReactNode }) {
 }
 
 /** 整棵路由树。`children` 画在页面组 `path="*"` 的元素里面，只给测试用：跟着它挂一次就说明元素没被重挂。 */
-export function RouterRoot({ children, actions = null, background, processing = false }:
+export function RouterRoot({ children, actions = null, background, processing: _processing = false }:
   { children?: ReactNode; actions?: ShellActions | null; background?: ReactNode; processing?: boolean }) {
   return (
     <Providers>
@@ -225,7 +223,6 @@ export function RouterRoot({ children, actions = null, background, processing = 
         <PeachRouter>
           <ManagedSurface />
           <QueueRequests />
-          {processing && actions ? <LibraryProcessingDock toast={actions.toast} /> : null}
           <RouteGroups>{children}</RouteGroups>
         </PeachRouter>
       </ShellActionsContext.Provider>

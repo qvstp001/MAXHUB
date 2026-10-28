@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from filelock import FileLock, Timeout
 
 from . import (access, distribution, entry_links, folder_picker, media_libraries, onboarding,
-               push_discovery, settings_file, media_configuration, tunnel, web_downloads)
+               settings_file, media_configuration, tunnel)
 from .routes_auth import require_auth, require_authenticated_client, same_origin
 from .web_entry import runtime_fact_entries
 from . import release_updates, standalone_update, peach_proxy, desktop_startup, desktop_uninstall
@@ -227,31 +227,6 @@ def tunnel_payload(config, state: tunnel.TunnelSnapshot, enabled: bool) -> dict[
     }
 
 
-def push_discovery_payload(request: Request, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    """推送发现的状态，外加一段能整个抄进 CloudDrive2 的配置。
-
-    读接口和两条写回接口用同一份形状：页面收到写回响应后整块替换本地状态，这里少一个
-    字段就等于把刚换完的密钥那段配置置空。
-
-    地址不取这次请求的 origin：配置页多半是从回环地址打开的，而 TLS 那条服务只绑在
-    局域网地址上，把 `127.0.0.1` 抄过去 CloudDrive2 连不上。取这台机器对外公布的那个
-    地址，也就是 mDNS 登记的同一个。没开 TLS 或者不知道自己的地址时给空串，页面据此
-    说这段现在给不出来，而不是发一段填了也不通的配置出去。
-    """
-    if payload is None:
-        payload = request.app.state.push_discovery.snapshot(reveal=True)
-    mdns = getattr(request.app.state, "mdns", None)
-    settings = request.app.state.settings
-    address = str(getattr(mdns, "address", "") or settings.mdns_address or "").strip()
-    port = int(settings.mdns_port or 0)
-    origin = ""
-    if settings.tls_enabled and address:
-        origin = f"https://{address}" if port in (0, 443) else f"https://{address}:{port}"
-    payload["origin"] = origin
-    payload["config_toml"] = push_discovery.clouddrive_config(origin, payload.get("secret", ""))
-    return payload
-
-
 @router.get("/api/configuration")
 def read_configuration(request: Request, _args=Depends(require_auth)):
     local_only(request)
@@ -265,8 +240,6 @@ def read_configuration(request: Request, _args=Depends(require_auth)):
     result["tunnel"] = tunnel_payload(config, state, config.tunnel.enabled)
     result["automatic_updates"] = request.app.state.automatic_updates.snapshot()
     # 这一路已经过了 `local_only`，密钥可以给出来：用户要把它抄进 CloudDrive2。
-    result["push_discovery"] = push_discovery_payload(request)
-    result["downloads"] = web_downloads.settings_payload(*_downloads(request))
     if result["automatic_updates"].get("result"):
         result["updates"] = result["automatic_updates"]["result"]
     return result
@@ -337,152 +310,6 @@ def save_entry_links(request: Request, body: dict = Body(...), _args=Depends(req
         return entry_links.save(settings_file.load_config().directory("state"), body)
     except (ValueError, OSError, Timeout) as exc:
         raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/api/configuration/push-discovery")
-def save_push_discovery(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
-    local_only(request)
-    same_origin(request)
-    try:
-        return push_discovery_payload(request, request.app.state.push_discovery.save(body))
-    except (ValueError, OSError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/api/configuration/push-discovery/secret")
-def rotate_push_discovery_secret(request: Request, _args=Depends(require_auth)):
-    """换一份共享密钥。换完之后 CloudDrive2 那一侧要跟着填新的，否则它推来的一律被拒。"""
-    local_only(request)
-    same_origin(request)
-    try:
-        return push_discovery_payload(request, request.app.state.push_discovery.rotate_secret())
-    except (ValueError, OSError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-def _downloads(request: Request):
-    """取得云下载服务，以及推送发现使用的同一份数据库路径前缀配置。"""
-    return (request.app.state.downloads,
-            getattr(request.app.state.push_discovery, "declared_roots", {}))
-
-
-@router.get("/api/configuration/indexers")
-def get_indexers(request: Request, _args=Depends(require_auth)):
-    from .resource_search import Indexers
-    local_only(request)
-    try:
-        return Indexers(request.app.state.downloads.credentials).public()
-    except (ValueError, OSError):
-        raise HTTPException(400, "索引器配置读不出来") from None
-
-
-@router.post("/api/configuration/indexers")
-def save_indexers(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
-    from .resource_search import Indexers
-    local_only(request)
-    same_origin(request)
-    try:
-        return Indexers(request.app.state.downloads.credentials).save(body)
-    except ValueError as error:
-        raise HTTPException(400, str(error)) from None
-    except OSError:
-        raise HTTPException(400, "索引器配置没有保存，请检查本机凭据目录权限") from None
-
-
-@router.post("/api/configuration/downloads")
-def save_downloads(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
-    """地址、目标目录、等待上限与 CloudDrive2 令牌。令牌只写本机凭据文件。
-
-    有令牌时随响应回一份按已保存配置做的检查报告；115 目标目录留空时按推送发现填上。"""
-    local_only(request)
-    same_origin(request)
-    service, roots = _downloads(request)
-    try:
-        return web_downloads.save_settings(service, body, roots)
-    except (ValueError, OSError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.get("/api/configuration/downloads/check")
-def check_saved_downloads(request: Request, _args=Depends(require_auth)):
-    """按已保存的地址、令牌与目录检查，页面打开时用。令牌只从本机凭据文件取，不经页面。"""
-    local_only(request)
-    service, _roots = _downloads(request)
-    try:
-        return web_downloads.check_clouddrive(service, {})
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/api/configuration/downloads/check")
-def check_downloads(request: Request, body: dict = Body(default={}), _args=Depends(require_auth)):
-    """调 CloudDrive2 的 `GetApiTokenInfo` 等只读接口：离线权限、目标目录、115 剩余配额，
-    目标目录与 PikPak 根留空时按推送发现推建议值。"""
-    local_only(request)
-    same_origin(request)
-    service, _roots = _downloads(request)
-    try:
-        return web_downloads.check_clouddrive(service, body)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/api/configuration/downloads/folder")
-def create_download_folder(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
-    """调 CloudDrive2 的 `CreateFolder` 建 115 目标目录。只在用户点「新建这个目录」时发。"""
-    local_only(request)
-    same_origin(request)
-    service, _roots = _downloads(request)
-    try:
-        return web_downloads.create_clouddrive_folder(service, body)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/api/configuration/downloads/pikpak/login")
-def login_pikpak(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
-    local_only(request)
-    same_origin(request)
-    service, roots = _downloads(request)
-    try:
-        return web_downloads.pikpak_login(service, body, roots)
-    except (ValueError, OSError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/api/configuration/downloads/pikpak/browser-login")
-def start_pikpak_browser_login(request: Request, _args=Depends(require_auth)):
-    """拉起 PikPak 登录窗口（ADR-0093），立刻回设置块；登录在后台等，页面轮询下面那条读接口。"""
-    local_only(request)
-    same_origin(request)
-    service, roots = _downloads(request)
-    try:
-        return web_downloads.pikpak_browser_start(service, roots)
-    except (ValueError, OSError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.get("/api/configuration/downloads/pikpak/browser-login")
-def pikpak_browser_login_status(request: Request, _args=Depends(require_auth)):
-    local_only(request)
-    service, roots = _downloads(request)
-    return web_downloads.settings_payload(service, roots)
-
-
-@router.post("/api/configuration/downloads/pikpak/browser-login/cancel")
-def cancel_pikpak_browser_login(request: Request, _args=Depends(require_auth)):
-    local_only(request)
-    same_origin(request)
-    service, roots = _downloads(request)
-    return web_downloads.pikpak_browser_cancel(service, roots)
-
-
-@router.post("/api/configuration/downloads/pikpak/logout")
-def logout_pikpak(request: Request, _args=Depends(require_auth)):
-    local_only(request)
-    same_origin(request)
-    service, roots = _downloads(request)
-    return web_downloads.pikpak_logout(service, roots)
 
 
 @router.post("/api/configuration/startup")

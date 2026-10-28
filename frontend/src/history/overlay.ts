@@ -15,8 +15,6 @@ import { isPreferencePath } from './settings-route';
 /** 覆盖在页面上的那几种地址。不进 `isRoutedPath`：页面宿主不画它们。 */
 export const OVERLAY_PATHS = [
   '/assets/:id',
-  '/posts/:id',
-  '/works/:code',
 ] as const;
 
 export type OverlayPath = typeof OVERLAY_PATHS[number];
@@ -39,10 +37,6 @@ export function overlayMatch(pathname: string, search = ''): { path: OverlayPath
   for (const path of OVERLAY_PATHS) {
     const match = matchPath(path, pathname);
     if (!match) continue;
-    if (path === '/works/:code') {
-      const code = match.params.code || '';
-      return /^[A-Za-z0-9_-]{2,64}$/.test(code) ? { path, target: { kind: 'jav', code } } : null;
-    }
     const values = Object.values(match.params);
     if (!values.every((value) => /^\d+$/.test(value ?? ''))) return null;
     const first = Number(values[0]);
@@ -58,7 +52,7 @@ export function overlayMatch(pathname: string, search = ''): { path: OverlayPath
         }
       }
     }
-    return { path, target: { kind: path === '/assets/:id' ? 'item' : 'follow', id: first } };
+    return { path, target: { kind: 'item', id: first } };
   }
   return null;
 }

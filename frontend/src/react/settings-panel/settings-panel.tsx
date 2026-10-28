@@ -13,14 +13,13 @@
  * 每次打开时共用控件重画、数值框回到当前值，并重取共享设置。
  * 焦点先交给关闭钮，Tab 在面板里转圈，关掉后还给打开前那一枚。 */
 import {
-  useLayoutEffect, useRef, useState, useSyncExternalStore,
+  useLayoutEffect, useRef, useSyncExternalStore,
   type KeyboardEvent, type ReactNode,
 } from 'react';
 import { flushSync } from 'react-dom';
-import { ButtonLink } from '@/components/base/buttons/button';
 import {
   attachOverlayScrollbar, closeAnchoredMenu, iconSwapHtml, moveGlidePane, revealTexts,
-  setActionBusy, setIconSwap, wireHorizontalScroller,
+  setIconSwap, wireHorizontalScroller,
 } from '@peach/legacy/ui';
 
 import { normalizeJavImage } from '../../jav-artwork';
@@ -29,7 +28,7 @@ import { GlowSettings } from './glow-settings';
 import { Icon, RemixIcon } from './icon';
 import { IconSwitch, SelectField } from './legacy-controls';
 import { NumberSetting } from './number-setting';
-import type { Choice, PanelSettings, SettingsPanelApi, SettingsPanelHost } from './settings-panel-api';
+import type { Choice, SettingsPanelApi, SettingsPanelHost } from './settings-panel-api';
 import { refreshPanelData, useSaveSettings } from './settings-data';
 import { SidebarOrder } from './sidebar-order';
 import { SettingsDialogClose } from '../components/settings-dialog-close';
@@ -38,7 +37,7 @@ import { SettingsDialogClose } from '../components/settings-dialog-close';
    才一样粗。 */
 const SECTIONS = [
   ['外观与导航', 'ri-palette-line'], ['浏览与播放', 'ri-play-circle-line'],
-  ['JAV 与新作', 'jav'], ['搜索与推荐', 'ri-search-line'], ['内容显示', 'ri-shield-check-line'],
+  ['作品显示', 'jav'], ['搜索', 'ri-search-line'], ['内容显示', 'ri-shield-check-line'],
 ] as const;
 
 const SORT_OPTIONS: readonly Choice[] = [
@@ -47,13 +46,6 @@ const SORT_OPTIONS: readonly Choice[] = [
 ];
 const DIRECTION_OPTIONS: readonly Choice[] = [['desc', '降序'], ['asc', '升序']];
 const JAV_IMAGE_OPTIONS: readonly Choice[] = [['cover', '官方封面', ''], ['thumbnail', '预览图', '']];
-/* 新作那一行收不收合集由服务端按数据库里的设置筛，这里的开关只是镜像：真相在 `/api/settings`。 */
-const FEED_COMPILATIONS = [
-  ['feedHideGroupSetting', 'feedHideGroupCompilations', '大合集', '隐藏大合集'],
-  ['feedHideSoloSetting', 'feedHideSoloCompilations', '单人合集', '隐藏单人合集'],
-  ['feedHideExcerptSetting', 'feedHideExcerpts', '切片', '隐藏切片'],
-] as const;
-type CompilationKey = typeof FEED_COMPILATIONS[number][1];
 
 const FOCUSABLE = 'button:not([disabled]),input:not([disabled]),textarea:not([disabled]),a[href]';
 
@@ -368,7 +360,6 @@ function SettingsPanel({ host: current, view: shown }: { host: SettingsPanelHost
                   onApply={(value) => { settings.relatedLimit = value; save() }} />
               </div>
             </Row>
-            <Row title="口味与记录"><div className="peach-react"><ButtonLink variant="secondary" href="/taste" onClick={() => close(false)}>打开口味与记录</ButtonLink></div></Row>
           </Group>
           <Group index={4} tab={shown.tab}>
             <ToggleRow id="censorSetting" title="SFW 模式" describedBy="sfwDescription" checked={current.censored()}
@@ -453,47 +444,9 @@ function JavGroup({ host: current, tab, epoch }: GroupProps) {
         <input type="checkbox" id="groupCollapseSetting" data-toggle="" role="switch" checked={settings.groupCollapse}
           onChange={(event) => { settings.groupCollapse = event.target.checked; save(); current.changed('groupCollapse') }} />
       </label>
-      <h4 data-settings-subheading="">新作显示</h4>
-      <ToggleRow id="feedAutoScrollSetting" title="新作自动滚动" checked={settings.feedAutoScroll}
-        onToggle={(on) => { settings.feedAutoScroll = on; save(); current.changed('feedAutoScroll') }} />
-      {FEED_COMPILATIONS.map(([id, key, label, title]) => (
-        <CompilationToggle key={id} host={current} id={id} settingKey={key} label={label} title={title} />
-      ))}
     </Group>
   );
 }
-/* 合集开关由服务端判，列表、未读数和补封面排队都跟着它，所以先存到服务端再重画；往返期间开关
-   停在新位置、挂忙态，失败退回原位。 */
-function CompilationToggle({ host: current, id, settingKey, label, title }: {
-  host: SettingsPanelHost; id: string; settingKey: CompilationKey; label: string; title: string;
-}) {
-  const save = useSaveSettings();
-  const [pending, setPending] = useState<boolean | null>(null);
-  const box = useRef<HTMLInputElement | null>(null);
-  const settings: PanelSettings = current.store.value;
-  const toggle = (on: boolean) => {
-    setPending(on);
-    setActionBusy(box.current);
-    save.mutate({ [settingKey]: on }, {
-      onSuccess: (saved) => {
-        settings[settingKey] = saved[settingKey] === true;
-        current.store.save();
-        current.changed('feedCompilations');
-        current.receipt(on ? `新作已收起${label}` : `新作已列出${label}`);
-      },
-      onError: (error) => current.failure(`保存${label}开关`, error),
-      onSettled: () => { setPending(null); setActionBusy(box.current, false) },
-    });
-  };
-  return (
-    <label data-setting-row="">
-      <span><b>{title}</b></span>
-      <input data-toggle="" type="checkbox" id={id} role="switch" ref={box}
-        checked={pending ?? settings[settingKey]} onChange={(event) => toggle(event.target.checked)} />
-    </label>
-  );
-}
-
 function PlaybackRows({ host: current, epoch }: Omit<GroupProps, 'tab'>) {
   const settings = current.store.value;
   const save = () => current.store.save();

@@ -238,7 +238,7 @@ describe('换手', () => {
 });
 
 describe('导航', () => {
-  it('完整词表按持久偏好画默认导航，沉浸模式可在关注后启用', async () => {
+  it('完整词表按持久偏好画默认导航，沉浸模式可在首页后启用', async () => {
     const r = await load();
     await mountRouter(r);
     await connect(r);
@@ -249,10 +249,10 @@ describe('导航', () => {
     expect(navKeys(scroll)).toEqual(DEFAULT_SIDEBAR_ORDER);
     expect(scroll.querySelector('[data-nav="immerse"]')).toBeNull();
     await act(async () => {
-      store.value.sidebarOrder = ['follow', 'immerse', ...DEFAULT_SIDEBAR_ORDER.filter((key) => key !== 'follow')];
+      store.value.sidebarOrder = ['', 'immerse', ...DEFAULT_SIDEBAR_ORDER.filter((key) => key !== '')];
       store.save();
     });
-    expect(navKeys(scroll).slice(0, 2)).toEqual(['follow', 'immerse']);
+    expect(navKeys(scroll).slice(0, 2)).toEqual(['', 'immerse']);
     expect(scroll.querySelector('[data-nav="immerse"]')?.textContent).toContain('沉浸模式');
   });
 

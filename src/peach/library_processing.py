@@ -778,6 +778,16 @@ def _issue_classification(message, retryable, paused):
     return ('info' if note else 'paused' if paused else 'error'), retryable and not note
 
 
+def _asset_issue_record(asset, message, *, action='', retryable=False, paused=False):
+    """将资产与失败原因投影为日志记录；来源离线等问题允许没有资产。"""
+    asset = asset or {}
+    title = str(asset.get('catalog_title') or '') or Path(str(asset.get('name') or '')).name
+    severity, retryable = _issue_classification(message, retryable, paused)
+    return {'asset_id': asset.get('id'), 'title': title, 'path': str(asset.get('path') or ''),
+            'message': message, 'severity': severity, 'failed_action': action,
+            'retryable': retryable, 'last_failed_at': time.time()}
+
+
 def _record_issue(state, log_path, record, *, diagnostics=None):
     """把一条记录写进日志，并按类型计进状态。
 
@@ -2313,15 +2323,8 @@ def process_library(config, db_path, candidate_root, cover_root, *, location='co
             每条问题都带上标题与路径：光有「NFO 无法解析」和一个链接，人得逐个点开
             才知道是哪个文件，而路径才是去磁盘上确认或改名时真正要用的东西。
             """
-            asset = asset or {}
-            asset_id = asset.get('id')
-            title = str(asset.get('catalog_title') or '') or Path(str(asset.get('name') or '')).name
-            asset_path = str(asset.get('path') or '')
-            severity, retryable = _issue_classification(message, retryable, paused)
-            _record_issue(state, log_path, {
-                'asset_id': asset_id, 'title': title, 'path': asset_path, 'message': message,
-                'severity': severity, 'failed_action': action, 'retryable': retryable,
-                'last_failed_at': time.time()}, diagnostics=diagnostics)
+            record = _asset_issue_record(asset, message, action=action, retryable=retryable, paused=paused)
+            _record_issue(state, log_path, record, diagnostics=diagnostics)
             state['last_progress_at'] = time.time()
             flush_state()
             report(dict(state))

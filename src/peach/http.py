@@ -13,11 +13,12 @@ import re
 import socket
 import urllib.parse
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import TYPE_CHECKING, Mapping, Protocol
 
 import httpx
-from curl_cffi import requests as curl_requests
-from curl_cffi.requests.exceptions import CurlError
+
+if TYPE_CHECKING:
+    from curl_cffi import requests as curl_requests
 
 #: 只在本机或局域网里有意义的名字后缀。外面递进来的地址落到它们上，只可能是想让
 #: Peach 替人去探内网。
@@ -264,6 +265,7 @@ class CurlCffiTransport:
 
     def __init__(self, *, impersonate: str,
                  session: curl_requests.Session | None = None):
+        from curl_cffi import requests as curl_requests
         self.session = session or curl_requests.Session(impersonate=impersonate)
         self._owns_session = session is None
 
@@ -273,6 +275,7 @@ class CurlCffiTransport:
         timeout: float,
         max_bytes: int,
     ) -> HttpResponse:
+        from curl_cffi.requests.exceptions import CurlError
         chunks: list[bytes] = []
         total = 0
         try:

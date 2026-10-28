@@ -1,9 +1,7 @@
 name: Test
 
 on:
-  push:
-    branches: [master]
-  pull_request:
+  # 上游完整功能回归供历史模块维护时手动运行；播放器由 player.yml 验收。
   workflow_dispatch:
 
 permissions:

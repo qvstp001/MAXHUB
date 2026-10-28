@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 import re
 
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import (
@@ -143,9 +143,9 @@ def _access_on_by_default(asked) -> bool:
     return host_default == "2"
 
 
-def _setup_destination(config, *, history_guide: bool) -> str:
-    """完成页的入口：进馆藏，或者选了导入浏览器历史就先去口味页。都带 `onboarding=1`。"""
-    return _normal_url(config) + ('taste?onboarding=1' if history_guide else '?onboarding=1')
+def _setup_destination(config, *, history_guide: bool = False) -> str:
+    """完成设置后进入媒体库设置。"""
+    return _normal_url(config) + 'settings/library'
 
 
 def _normal_url(config) -> str:
@@ -334,7 +334,6 @@ def setup_questions(request: Request):
     只是不看 Origin：配置完成后这里 404，运行事实不再对外。
     """
     _setup_guard(request, submit=False)
-    from . import remote_reporting
     windows = os.name == "nt"
     asked = onboarding.questions(settings_file.active(), windows=windows)
     host_labels = dict(onboarding.HOST_OPTIONS)
@@ -371,7 +370,8 @@ def setup_questions(request: Request):
         "access_enabled": _access_on_by_default(asked),
         "scan_now": True,
         "history_guide": False,
-        "remote_reporting": remote_reporting.snapshot(),
+        "remote_reporting": {"usage": False, "errors": False, "available": False,
+                             "fields": [], "notice": ""},
     })
 
 
@@ -400,7 +400,7 @@ async def setup_submit_json(request: Request):
         raise HTTPException(status_code=400, detail="请求正文要是 JSON 对象")
     from . import remote_reporting
     try:
-        reporting = remote_reporting.parse_choices(body.get("remote_reporting", {}), partial=True)
+        remote_reporting.parse_choices(body.get("remote_reporting", {}), partial=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     rows = body.get("media_dir")
@@ -414,7 +414,6 @@ async def setup_submit_json(request: Request):
     submitted["media_root"] = [_json_text(row.get("root")) for row in rows]
     submitted["media_cost"] = [row.get("cost") for row in rows]
     scan_now = body.get("scan_now") is True
-    history_guide = body.get("history_guide") is True
     windows = os.name == "nt"
     answers, errors = _read_answers(settings_file.active(), submitted, windows=windows)
     from . import access
@@ -446,18 +445,18 @@ async def setup_submit_json(request: Request):
             errors = {"data_root": str(exc)}
     if errors:
         raise HTTPException(status_code=400, detail={"message": "有几项需要修改", "errors": errors})
-    remote_reporting.save(reporting, applied.config)
+    remote_reporting.save({"usage": False, "errors": False}, applied.config)
     if scan_now:
         onboarding.request_first_scan(applied.config, "configured" if answers.media_sources is not None else "local")
-    return _setup_done(applied.config, scan_now=scan_now, history_guide=history_guide)
+    return _setup_done(applied.config, scan_now=scan_now)
 
 
 def _setup_done(config, *, scan_now: bool = False, history_guide: bool = False, restored: bool = False):
-    destination = _setup_destination(config, history_guide=history_guide)
+    destination = _setup_destination(config)
     return JSONResponse({
         "url": destination,
         "scan_requested": scan_now,
-        "history_guide": history_guide,
+        "history_guide": False,
         "restored": restored,
         "standalone": distribution.standalone(),
         # 独立包的完成页过一会儿自己跳到入口；时长由前端定，与配置页保存后的跳转同一个数。
@@ -699,43 +698,35 @@ def asset_route_redirect(request: Request, item_id: int, seed_id: int | None = N
     return _page_redirect(request, f"/assets/{item_id}", context=context)
 
 
-@router.api_route("/jav/movie/{code}", methods=["GET", "HEAD"])
 @router.api_route("/works/{code}", methods=["GET", "HEAD"])
 def work_route(request: Request, code: str, args: dict[str, str] = Depends(require_page_auth)):
     from .sample_images import code_key
 
+    if not request.app.state.settings.configured:
+        raise HTTPException(404, "not found")
     key = code_key(code)
     if not key:
         raise HTTPException(404, "not found")
-    path = f"/works/{quote(key, safe='')}"
-    if request.url.path != path:
-        return _page_redirect(request, path)
-    return index(request, args)
+    with request.app.state.web_contract.read_connection() as connection:
+        row = connection.execute(
+            "SELECT id FROM asset WHERE medium='video' AND disposal IS NULL "
+            "AND path IS NOT NULL AND TRIM(path)<>'' "
+            "AND normalise_code_key(code)=? ORDER BY id LIMIT 1", (key,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "not found")
+    return _page_redirect(request, f"/assets/{row['id']}")
 
 
-@router.api_route("/follow/item/{item_id}", methods=["GET", "HEAD"])
-def post_route_redirect(request: Request, item_id: int,
-                        args: dict[str, str] = Depends(require_page_auth)):
-    return _page_redirect(request, f"/posts/{item_id}")
-
-
-@router.api_route("/activity", methods=["GET", "HEAD"])
-@router.api_route("/scraping", methods=["GET", "HEAD"])
 @router.api_route("/configuration", methods=["GET", "HEAD"])
-@router.api_route("/follow-manage", methods=["GET", "HEAD"])
-@router.api_route("/diagnostics", methods=["GET", "HEAD"])
 def management_route_redirect(request: Request, args: dict[str, str] = Depends(require_page_auth)):
-    paths = {"/activity": "/tasks", "/scraping": "/sources",
-             "/configuration": "/settings/library", "/follow-manage": "/subscriptions",
-             "/diagnostics": "/settings/diagnostics"}
-    return _page_redirect(request, paths[request.url.path])
+    return _page_redirect(request, "/settings/library")
 
 
 @router.api_route("/settings/{section}", methods=["GET", "HEAD"])
 def settings_section_route(request: Request, section: str,
                            args: dict[str, str] = Depends(require_page_auth)):
     if section not in {"appearance", "playback", "jav", "search", "content", "library",
-                       "subscriptions", "downloads", "network", "maintenance", "diagnostics"}:
+                       "network", "maintenance", "diagnostics"}:
         raise HTTPException(404, "not found")
     return index(request, args)
 
@@ -780,14 +771,12 @@ def entity_route(request: Request, name: str,
 
 
 @router.api_route("/assets/{item_id}", methods=["GET", "HEAD"])
-@router.api_route("/posts/{item_id}", methods=["GET", "HEAD"])
 @router.api_route("/playlists", methods=["GET", "HEAD"])
 @router.api_route("/performers", methods=["GET", "HEAD"])
 @router.api_route("/creators", methods=["GET", "HEAD"])
 @router.api_route("/studios", methods=["GET", "HEAD"])
 @router.api_route("/agencies", methods=["GET", "HEAD"])
 @router.api_route("/tags", methods=["GET", "HEAD"])
-@router.api_route("/jav", methods=["GET", "HEAD"])
 @router.api_route("/unseen", methods=["GET", "HEAD"])
 @router.api_route("/watch-later", methods=["GET", "HEAD"])
 @router.api_route("/flagged", methods=["GET", "HEAD"])
@@ -797,17 +786,12 @@ def entity_route(request: Request, name: str,
 @router.api_route("/wall", methods=["GET", "HEAD"])
 @router.api_route("/trash", methods=["GET", "HEAD"])
 @router.api_route("/review", methods=["GET", "HEAD"])
-@router.api_route("/taste", methods=["GET", "HEAD"])
 @router.api_route("/data-cleanup", methods=["GET", "HEAD"])
 @router.api_route("/duplicates", methods=["GET", "HEAD"])
 @router.api_route("/quality-goals", methods=["GET", "HEAD"])
 # 任务中心那一屏（island），数据走 `/api/tasks`。深链要能直接打开：定时任务被挡下时
 # 留下的记录是「刚才为什么没跑」的唯一答案，从别处贴过来的地址不该是 404。
 @router.api_route("/tasks", methods=["GET", "HEAD"])
-@router.api_route("/sources", methods=["GET", "HEAD"])
-@router.api_route("/resource-sync", methods=["GET", "HEAD"])
-@router.api_route("/follow", methods=["GET", "HEAD"])
-@router.api_route("/subscriptions", methods=["GET", "HEAD"])
 # 配置页是主站里的一屏（island），数据走 `/api/configuration`。未配置时 `index()` 给的是
 # 首次运行表单，正好就是「请先完成首次设置」该长的样子。
 @router.api_route("/settings", methods=["GET", "HEAD"])

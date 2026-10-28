@@ -3,7 +3,7 @@ import { DEFAULT_SIDEBAR_ORDER, normalizeSidebarOrder, sidebarTagCounts, sidebar
 
 describe('侧栏顺序', () => {
   it('认旧键、去重、丢掉这一版没有的入口', () => {
-    expect(normalizeSidebarOrder(['', 'ads', 'dupes', 'tags', 'tags', 'nope', 'trash'])).toEqual(['', 'data-cleanup', 'tags', 'trash']);
+    expect(normalizeSidebarOrder(['', 'ads', 'dupes', 'tags', 'tags', 'nope', 'trash'])).toEqual(['', 'tags']);
   });
   it('读不出顺序或一项不剩时回到默认，且不与默认那份共用数组', () => {
     for (const value of [null, 'tags', [], ['nope'], [1, 2]]) expect(normalizeSidebarOrder(value)).toEqual(DEFAULT_SIDEBAR_ORDER);

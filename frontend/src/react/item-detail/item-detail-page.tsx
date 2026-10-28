@@ -29,12 +29,9 @@ import { IdentityCell, IdentitySeries } from '../components/identity-cell';
 import { useFoldedTitle } from '../components/folded-title';
 import { MediaCarousel } from '../components/media-carousel';
 import { CatalogPicture } from './catalog-picture';
-import { fetchJavDetail, javDetailKey } from '../jav-detail/jav-detail';
-import { busyProps } from '../settings/use-action';
 import { ExternalPlayback } from './external-playback';
 import { CoverCrop } from '../cover-crop/cover-crop-page';
 import { queryClient } from '../query';
-import { LibraryCompletionPrompt, missingPreviewIds } from '../library-processing/library-completion';
 import {
   CAST_SHOWN, EDITION_TONE, FEEDBACK_URL, ITEM_TAG_URL, PLAYLIST_URL, PREFERENCE_URL, QUALITY_GOAL_URL,
   RELATED_URL, WATCH_LATER_URL, chooseItem, clampRating, detailTags, feedbackReceipt, fetchItem, fetchQueue,
@@ -137,16 +134,7 @@ function MediaFrame({ item, gate, helpers, actions, autoplay, onEnded }: {
      整个实例还要搬进来，那一截 DOM 不归 React。 */
   const frameRef = useRef<HTMLDivElement>(null);
   const [image, setImage] = useState(-2);
-  const refreshSamples = useRef(false);
-  const source = useQuery({ queryKey: javDetailKey(item.code || ''),
-    queryFn: ({ signal }) => {
-      const refresh = refreshSamples.current;
-      refreshSamples.current = false;
-      return fetchJavDetail(item.code!, signal, refresh);
-    }, staleTime: 6 * 3600_000,
-    enabled: !!item.is_jav && !!item.code && !item.sample_images?.length });
-  const samples = item.sample_images?.length ? item.sample_images.map(sample => ({ index: sample.n, source: false }))
-    : Array.from({ length: Math.min(30, Math.max(0, source.data?.preview_count || 0)) }, (_, index) => ({ index: index + 1, source: true }));
+  const samples = (item.sample_images || []).map(sample => ({ index: sample.n, source: false }));
   const media = [
     ...(item.has_backdrop ? [{ index: -3, label: '横幅' }] : []),
     ...(item.is_jav && item.code ? [
@@ -185,10 +173,6 @@ function MediaFrame({ item, gate, helpers, actions, autoplay, onEnded }: {
           below renderThumbnail={entry => <CatalogPicture item={item} image={entry.index === -2 ? media[0]!.index : entry.index}
             source={samples.find(sample => sample.index === (entry.index === -2 ? media[0]!.index : entry.index))?.source} thumbnail />} />
       </> : null}
-      {item.is_jav && item.code && !item.sample_images?.length && (source.isPending || source.error || source.data?.state === 'partial') ?
-        <div data-item-samples-state="">{source.isPending ? <span data-skeleton="samples" role="status" aria-label="正在读取样图" className="relative block h-12 w-20 skeleton-sheen" />
-          : <Button variant="secondary" {...busyProps(source.isFetching)} title={source.data?.message || requestErrorMessage(source.error)}
-            onClick={() => { refreshSamples.current = true; void source.refetch() }}>重试样图</Button>}</div> : null}
       {gate === 'offline' ? <OfflineGate item={item} badge={badge} helpers={helpers} actions={actions} />
         : gate === 'disc' ? (
           <div role="status" data-item-gate="disc">
@@ -372,7 +356,7 @@ function Side({ item, queue, write, helpers, actions }: {
 }) {
   const online = item.location === 'online';
   const busy = write.busyAttrs;
-  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reasonOpen] = useState(false);
   return (
     <div data-stage-side="" data-item-side="">
       <div data-stage-side-content="">
@@ -395,29 +379,17 @@ function Side({ item, queue, write, helpers, actions }: {
         </div>
         <Identity item={item} helpers={helpers} actions={actions} />
         <Tags item={item} write={write} helpers={helpers} actions={actions} />
-        <LibraryCompletionPrompt assetIds={missingPreviewIds([item], helpers.javImage())}
-          onComplete={() => { void queryClient.invalidateQueries({ queryKey: itemKey(item.id) }) }} />
         <Trace item={item} />
         {item.medium === 'video' && item.location !== 'online' ? <ExternalPlayback key={item.id} id={item.id} isStrm={item.is_strm} /> : null}
         <div data-stage-actions="" data-item-feedback="">
-          <button type="button" id="likeBtn" data-fb="like" aria-label={item.liked ? '取消喜欢' : '喜欢'} title="喜欢 · 记录口味偏好"
+          <button type="button" id="likeBtn" data-fb="like" aria-label={item.liked ? '取消收藏' : '收藏'} title="收藏"
             aria-pressed={!!item.liked} {...busy('like')} onClick={() => write.preference({ liked: !item.liked })}><Glyph name="thumbs-up" /></button>
-          <button type="button" id="preferenceToggle" data-fb="reason" aria-label="喜爱理由" title="喜爱理由" aria-expanded={reasonOpen}
-            aria-controls="preferencePanel" data-has-reason={String(!!item.like_reason)}
-            onClick={() => setReasonOpen((open) => !open)}><Glyph name="notebook-pen" /></button>
-          <button type="button" data-stage-action="dislike" data-kind="dislike" aria-label="不合口味" title="不合口味 · 降低推荐权重"
-            aria-pressed={item.feedback === 'dislike'} {...busy('dislike')} onClick={() => write.feedback('dislike')}><Glyph name="thumbs-down" /></button>
-          <button type="button" data-stage-action="seen" data-kind="seen" aria-label="看过了" title="看过了 · 只降低近期推荐"
+          <button type="button" data-stage-action="seen" data-kind="seen" aria-label="看过了" title="看过了"
             aria-pressed={item.feedback === 'seen'} {...busy('seen')} onClick={() => write.feedback('seen')}><Glyph name="eye" /></button>
           <button type="button" data-stage-action="later" id="stageLater" aria-label="稍后看" title="稍后看 · 加入或移出队列"
             aria-pressed={!!item.watch_later} {...busy('later')} onClick={write.later}><Glyph name={item.watch_later ? 'check' : 'bookmark-plus'} /></button>
           <button type="button" id="addPlaylist" data-fb="playlist" aria-label="加入播放列表" title="加入播放列表"
             onClick={() => actions.addToPlaylist(item)}><Glyph name="playlist" /></button>
-          <button type="button" id="betterVersion" data-fb="quality" aria-label="寻找更好版本"
-            title={item.better_version ? (item.better_version_reason || '已标记寻找更好版本') : '寻找高清、无水印或完整版'}
-            aria-pressed={!!item.better_version} {...busy('quality')} onClick={write.quality}><Glyph name="sparkles" /></button>
-          <button type="button" data-kind="dispose" data-fb="dispose" aria-label="移入回收站" title="移入回收站 · 文件仍保留，可从回收站永久清除"
-            aria-pressed={item.disposal === 'trash'} {...busy('dispose')} onClick={() => write.feedback('dispose')}><Glyph name="trash" /></button>
         </div>
         <Preference item={item} open={reasonOpen} write={write} />
         <button type="button" data-kind="o" {...busy('o')} onClick={() => write.feedback('o')}>
@@ -857,7 +829,7 @@ function useDetailWrite(item: DetailItem, actions: ItemDetailActions, label: (ta
     /* 喜欢与理由是同一条偏好：点喜欢键只改 `liked`，提交理由时有字就算喜欢。 */
     preference: ({ liked, reason }: { liked?: boolean; reason?: string }) => {
       const name = liked === undefined ? 'preference' : 'like';
-      start(name, '保存喜欢偏好', async () => {
+      start(name, '保存收藏', async () => {
         const before = { liked: !!current().liked, reason: current().like_reason || '' };
         const text = reason ?? before.reason;
         const wanted = liked ?? (before.liked || text.trim().length > 0);
@@ -873,7 +845,7 @@ function useDetailWrite(item: DetailItem, actions: ItemDetailActions, label: (ta
         setPreferenceState('已保存');
         setTimeout(() => setPreferenceState((now) => (now === '已保存' ? '' : now)), 1400);
         const saved = current();
-        actions.toast(saved.liked ? '已保存喜欢偏好' : '已取消喜欢', {
+        actions.toast(saved.liked ? '已加入收藏' : '已取消收藏', {
           undo: async () => { paint(await post<Preference>(PREFERENCE_URL, before)) },
         });
       });

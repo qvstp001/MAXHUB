@@ -196,9 +196,9 @@ describe('设置面板与壳的接缝', () => {
     const current = await setup();
     const openConfiguration = vi.fn();
     current.host.openConfiguration = openConfiguration;
-    const panel = await open(current, 'JAV 与新作');
+    const panel = await open(current, '作品显示');
     expect([...panel.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent))
-      .toEqual(['外观与导航', '浏览与播放', 'JAV 与新作', '搜索与推荐', '内容显示']);
+      .toEqual(['外观与导航', '浏览与播放', '作品显示', '搜索', '内容显示']);
     expect(panel.querySelector('#javImageSetting')?.closest('section')?.hidden).toBe(false);
     expect(panel.querySelector('#detailAutoplaySetting')?.closest('section')?.hidden).toBe(true);
     expect(panel.querySelector('#videoThumbnailSetting')).toBeNull();
@@ -223,7 +223,7 @@ describe('设置面板与壳的接缝', () => {
     const panel = await open(current);
     for (const [id, field, effect] of [
       ['uiSoundsSetting', 'uiSounds', 'uiSounds'], ['groupCollapseSetting', 'groupCollapse', 'groupCollapse'],
-      ['miniplayerSetting', 'miniplayer', 'miniplayer'], ['feedAutoScrollSetting', 'feedAutoScroll', 'feedAutoScroll'],
+      ['miniplayerSetting', 'miniplayer', 'miniplayer'],
     ] as const) {
       current.changed.mockClear();
       current.save.mockClear();

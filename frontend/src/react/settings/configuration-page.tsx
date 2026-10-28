@@ -13,13 +13,11 @@ import { errorMessage } from '../../api';
 import type { ConfigurationData, ConfigurationPanel, ConfigurationProps } from '../bundle';
 import { Note } from '../components/note';
 import { CONFIGURATION_KEY, fetchConfiguration } from './configuration';
-import { DownloadGroup } from './download-settings';
 import { GeneralSettings } from './general-settings';
 import { MaintenanceSettings } from './maintenance-settings';
 import { MediaSettings } from './media-settings';
-import { MediaProcessingSettings } from './media-processing-settings';
+import { LibraryScanSettings } from './library-scan-settings';
 import { NetworkSettings } from './network-settings';
-import { SourceSettings } from './source-settings';
 import { groupRoot } from './configuration-panel';
 
 export function ConfigurationPage({ receipt, reopenTutorial, section = '', diagnostics }: ConfigurationProps & { diagnostics?: ReactElement }) {
@@ -47,7 +45,7 @@ let tabSequence = 0;
 /* 页签条是一个 tablist，方向键在整排里走、首尾相接，Home／End 到两头，挪到哪一格就选中哪一格、焦点跟过去。
    分区地址与选中项同步，表单保持挂载。 */
 function ConfigurationGroups(
-  { data, receipt, reopenTutorial, section, diagnostics }: Required<ConfigurationProps> & { data: ConfigurationData; diagnostics?: ReactElement },
+  { data, receipt, reopenTutorial, section }: Required<ConfigurationProps> & { data: ConfigurationData; diagnostics?: ReactElement },
 ) {
   const [prefix] = useState(() => `board-tabs-${++tabSequence}`);
   const [chosen, setChosen] = useState(section);
@@ -79,16 +77,10 @@ function ConfigurationGroups(
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const group = { data, receipt };
   const network = Boolean(data.peach_proxy || data.access || data.tunnel || (data.editable && data.port_editable !== false));
-  const downloads = data.downloads;
   const groups: Group[] = [
     { title: '媒体库与入库', body: (panel) => <div {...groupRoot(panel)}>
-      <MediaSettings {...group} /><MediaProcessingSettings receipt={receipt} />
+      <MediaSettings {...group} /><LibraryScanSettings receipt={receipt} />
     </div> },
-    { title: '来源与订阅', body: (panel) => <SourceSettings {...group} panel={panel} /> },
-    ...(downloads ? [{
-      title: '下载渠道',
-      body: (panel: ConfigurationPanel) => <DownloadGroup initial={downloads} receipt={receipt} panel={panel} />,
-    }] : []),
     ...(network ? [{ title: '网络与访问', body: (panel: ConfigurationPanel) => <NetworkSettings {...group} panel={panel} /> }] : []),
     {
       title: '应用与维护',
@@ -97,7 +89,6 @@ function ConfigurationGroups(
         <MaintenanceSettings {...group} reopenTutorial={reopenTutorial} />
       </div>,
     },
-    { title: '系统诊断', body: panel => <div {...groupRoot(panel)}>{panel.active ? diagnostics : null}</div> },
   ];
   const at = Math.max(0, groups.findIndex((item) => item.title === chosen));
   const move = (event: KeyboardEvent<HTMLButtonElement>, from: number) => {

@@ -1,8 +1,4 @@
-/* 管理区的页面元素（`src/react/router/pages/managed.tsx`）：页面组按匹配挂上它就打开那一页。先报换页，
- * 再铺骨架（与壳冷启动铺的同键就不重画）、取首屏；没人认领的历史变化一次就是打开一次，认领的写地址与详情压上来都不重开；
- * 卸载时这一页还露在 `#stats` 上才收；`/resource-sync` 与配置页的 `#libraryProcessing` 改写地址、不加历史条目。
- *
- * 历史对象与壳的内存状态都是模块级的，每条用例重新装载。 */
+/* 统计与配置页的路由生命周期：首屏等待、历史代次、详情背景与离页停止提交。 */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
@@ -14,6 +10,7 @@ const REACT_IMPORT_TIMEOUT_MS = 30_000;
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeAll(async () => { await import('../../../src/react/router/router') }, REACT_IMPORT_TIMEOUT_MS);
+vi.mock('../../../src/react/stats/stats-page', () => ({ StatsPage: () => <p data-stats-page>馆藏统计</p> }));
 
 async function load(path = '/') {
   vi.resetModules();
@@ -69,15 +66,7 @@ function surface(r: Loaded, path: string) {
   return { stats, skeleton: stats.firstElementChild! };
 }
 
-const tasks = (label = '追更检查') => ({
-  available: true, running: [], skipped: [],
-  finished: [{
-    id: 1, task_key: 'follow-check', task_label: label, trigger: 'manual', status: 'succeeded', host: 'desk',
-    started_at: '2026-09-11T10:00:00Z', finished_at: '2026-09-11T10:00:05Z', elapsed_seconds: 5,
-    progress_current: null, progress_total: null, progress_label: '', result_summary: {}, error: '',
-    parent_run_id: null, root_run_id: null, followup_key: '', followup_depth: 0,
-  }],
-});
+const statsData = {};
 const configuration = {
   editable: true, notice: '', revision: 'rev-1', media_dirs: ['D:\\Media'], port: 9123, facts: [],
   startup: { available: true, enabled: false, silent: true, message: '', desktop: false, desktop_message: '' },
@@ -118,68 +107,68 @@ const settle = () => act(async () => { await new Promise((resolve) => { setTimeo
 const painted = (stats: Element) => stats.querySelector(':scope > .peach-react > *');
 
 it('挂上就打开：先报换页，骨架与冷启动那张同键不重画，首屏取齐才换成整页', async () => {
-  const r = await load('/tasks');
-  const { stats, skeleton } = surface(r, '/tasks');
+  const r = await load('/stats');
+  const { stats, skeleton } = surface(r, '/stats');
   const order: string[] = [];
   const actions = shellActions();
   vi.mocked(actions.surfaceChanged).mockImplementation((kind, path) => { order.push(`${kind} ${path}`) });
-  const api = serve({ '/api/tasks': tasks(), '/api/downloads': { available: true, providers: [], tasks: [] } }, ['/api/tasks']);
+  const api = serve({ '/api/stats': statsData }, ['/api/stats']);
   api.fetched.mockImplementationOnce(((original) => (input: string, init?: RequestInit) => {
     order.push(`fetch ${input.split('?')[0]}`);
     return original(input, init);
   })(api.fetched.getMockImplementation()!));
   await boot(r, actions);
-  await until(() => api.calls('/api/tasks') > 0, '首屏取数发出去');
-  expect(order).toEqual(['management /tasks', 'fetch /api/tasks']);
+  await until(() => api.calls('/api/stats') > 0, '首屏取数发出去');
+  expect(order).toEqual(['management /stats', 'fetch /api/stats']);
   expect(stats.firstElementChild, '同一张骨架原样留着').toBe(skeleton);
   api.resolve();
   await until(() => painted(stats) !== null, '整页画上');
   expect(stats.firstElementChild).not.toBe(skeleton);
-  expect(stats.textContent).toContain('追更检查');
+  expect(stats.textContent).toContain('馆藏统计');
 });
 
 it('没人认领的写地址一次就是打开一次：认领的写地址不重开，同一路径不认领再写就重取、重挂', async () => {
-  const r = await load('/tasks');
-  const { stats } = surface(r, '/tasks');
-  const api = serve({ '/api/tasks': tasks(), '/api/downloads': { available: true, providers: [], tasks: [] } });
+  const r = await load('/stats');
+  const { stats } = surface(r, '/stats');
+  const api = serve({ '/api/stats': statsData });
   await boot(r);
   await until(() => painted(stats) !== null, '第一次画上');
   const page = painted(stats);
   const revision = r.managedEntry(stats)?.revision;
-  await act(async () => { r.shellNavigate('/tasks?from=menu', { replace: true }) });
+  await act(async () => { r.shellNavigate('/stats?from=menu', { replace: true }) });
   await settle();
-  expect([api.calls('/api/tasks'), painted(stats)]).toEqual([1, page]);
+  expect([api.calls('/api/stats'), painted(stats)]).toEqual([1, page]);
   const length = window.history.length;
-  await act(async () => { r.peachHistory.push('/tasks') });
+  await act(async () => { r.peachHistory.push('/stats') });
   await until(() => painted(stats) !== null && painted(stats) !== page, '重挂之后再画上');
-  expect(api.calls('/api/tasks')).toBe(2);
+  expect(api.calls('/api/stats')).toBe(2);
   expect(r.managedEntry(stats)?.revision).not.toBe(revision);
   expect(window.history.length - length).toBe(1);
 });
 
 it('详情压在上面时页面不拆也不重开，关掉详情回到这一页照旧', async () => {
-  const r = await load('/tasks');
-  const { stats } = surface(r, '/tasks');
-  const api = serve({ '/api/tasks': tasks(), '/api/downloads': { available: true, providers: [], tasks: [] } });
+  const r = await load('/stats');
+  const { stats } = surface(r, '/stats');
+  const api = serve({ '/api/stats': statsData });
   await boot(r);
   await until(() => painted(stats) !== null, '画上');
   const page = painted(stats);
-  const overlay = { backgroundLocation: { pathname: '/tasks', search: '' }, overlay: 'item' };
+  const overlay = { backgroundLocation: { pathname: '/stats', search: '' }, overlay: 'item' };
   await act(async () => { r.shellNavigate('/assets/7', { state: overlay }) });
   await settle();
   expect(painted(stats), '舞台下面那一页留着').toBe(page);
-  await act(async () => { r.shellNavigate('/tasks') });
+  await act(async () => { r.shellNavigate('/stats') });
   await settle();
-  expect([painted(stats), api.calls('/api/tasks')]).toEqual([page, 1]);
+  expect([painted(stats), api.calls('/api/stats')]).toEqual([page, 1]);
 });
 
 it('后退落到压在这一页上的详情才挂上（中间去过别的页）时不开；关掉详情回来按地址打开一次', async () => {
-  const r = await load('/tasks');
-  const { stats } = surface(r, '/tasks');
-  const api = serve({ '/api/tasks': tasks(), '/api/downloads': { available: true, providers: [], tasks: [] } });
+  const r = await load('/stats');
+  const { stats } = surface(r, '/stats');
+  const api = serve({ '/api/stats': statsData });
   await boot(r);
   await until(() => painted(stats) !== null, '画上');
-  const overlay = { backgroundLocation: { pathname: '/tasks', search: '' }, overlay: 'item' };
+  const overlay = { backgroundLocation: { pathname: '/stats', search: '' }, overlay: 'item' };
   await act(async () => { r.shellNavigate('/assets/7', { state: overlay }) });
   await settle();
   await act(async () => { r.shellNavigate('/'); stats.replaceChildren() });
@@ -189,17 +178,17 @@ it('后退落到压在这一页上的详情才挂上（中间去过别的页）�
     window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
   });
   await settle();
-  expect([painted(stats), api.calls('/api/tasks')], '被详情压着挂上不开').toEqual([null, 1]);
-  await act(async () => { r.shellNavigate('/tasks') });
+  expect([painted(stats), api.calls('/api/stats')], '被详情压着挂上不开').toEqual([null, 1]);
+  await act(async () => { r.shellNavigate('/stats') });
   await until(() => painted(stats) !== null, '关掉详情后画上');
-  expect(api.calls('/api/tasks')).toBe(2);
+  expect(api.calls('/api/stats')).toBe(2);
 });
 
 it('走开时还露在 `#stats` 上就收起，收起排在提交之后、不报同步提交的告警；壳藏起了它就留着', async () => {
   const errors = vi.spyOn(console, 'error');
-  const r = await load('/tasks');
-  const { stats } = surface(r, '/tasks');
-  serve({ '/api/tasks': tasks(), '/api/downloads': { available: true, providers: [], tasks: [] } });
+  const r = await load('/stats');
+  const { stats } = surface(r, '/stats');
+  serve({ '/api/stats': statsData });
   await boot(r);
   await until(() => painted(stats) !== null, '画上');
   await act(async () => { r.shellNavigate('/') });
@@ -207,7 +196,7 @@ it('走开时还露在 `#stats` 上就收起，收起排在提交之后、不报
   expect([stats.querySelector('.peach-react'), r.managedEntry(stats)]).toEqual([null, null]);
   expect(errors).not.toHaveBeenCalled();
 
-  await act(async () => { r.peachHistory.push('/tasks') });
+  await act(async () => { r.peachHistory.push('/stats') });
   await until(() => painted(stats) !== null, '再开一次画上');
   const page = painted(stats);
   // 资料页压过来：壳在同一个任务里藏起 `#stats`，页面藏着照常活，等下一次认领表面才收。
@@ -217,62 +206,65 @@ it('走开时还露在 `#stats` 上就收起，收起排在提交之后、不报
   expect(errors).not.toHaveBeenCalled();
 });
 
-it('等 `/healthz` 期间走开：读请求中止，这一页不再打开', async () => {
-  const r = await load('/review?category=creator_tags');
-  surface(r, '/review');
-  const api = serve({ '/healthz': {} }, ['/healthz']);
+it('统计首屏取数期间离开：响应回来也不占用下一页的容器', async () => {
+  const r = await load('/stats');
+  const { stats } = surface(r, '/stats');
+  const api = serve({ '/api/stats': statsData }, ['/api/stats']);
   await boot(r);
-  await until(() => api.calls('/healthz') > 0, '问只读态');
-  await act(async () => { r.shellNavigate('/') });
-  await settle();
-  expect(api.signal('/healthz')?.aborted).toBe(true);
+  await until(() => api.calls('/api/stats') > 0, '统计请求发出');
+  await act(async () => { r.shellNavigate('/'); stats.innerHTML = '<p data-next-page>下一页</p>' });
   api.resolve();
   await settle();
-  expect(api.fetched.mock.calls.map(([input]) => input.split('?')[0])).toEqual(['/healthz']);
+  expect(stats.querySelector('[data-next-page]')).not.toBeNull();
+  expect(stats.querySelector('[data-stats-page]')).toBeNull();
+  expect(r.managedEntry(stats)).toBeNull();
 });
 
-it('口味页打开时清掉目录筛选与搜索框，引导标记交出一次就清', async () => {
-  const r = await load('/taste');
-  r.shell.writeShell({
-    state: { creator: 'a', studio: 'b', tag: 'c', tag_match: 'any', q: 'd', jav: '1', sort: 'seed' } as never,
-    cameFromSetup: true,
-  });
-  surface(r, '/taste');
-  serve({});
+it('配置页打开时交出指定分区；画上才清除一次性请求', async () => {
+  const r = await load('/settings/library');
+  r.shell.writeShell({ configurationRequestedSection: '网络与访问' });
+  const { stats } = surface(r, '/settings/library');
+  const api = serve({ '/api/configuration': configuration, '/api/library-processing': { status: 'idle' } }, ['/api/configuration']);
+  await boot(r);
+  await until(() => api.calls('/api/configuration') > 0, '配置请求发出');
+  expect(r.shell.configurationRequestedSection).toBe('网络与访问');
+  api.resolve();
+  await until(() => painted(stats) !== null, '配置画上');
+  expect(r.shell.configurationRequestedSection).toBe('');
+  expect(stats.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('网络与访问');
+});
+
+it('在线管理与资源同步地址不认领本地管理容器，也不改写地址', async () => {
+  const r = await load('/subscriptions');
+  const { stats } = surface(r, '/subscriptions');
+  const api = serve({});
   const { actions } = await boot(r);
-  await until(() => vi.mocked(actions.clearSearch).mock.calls.length > 0, '清搜索框');
-  expect(r.shell.state).toMatchObject({
-    creator: '', studio: '', tag: '', tag_match: 'all', len: '', dur_min: '', dur_max: '', orient: '', region: '',
-    state: '', q: '', jav: '', sort: 'seed',
-  });
-  expect(r.shell.cameFromSetup).toBe(false);
-});
-
-it('旧直达地址 `/resource-sync` 改写成数据管理页的锚点，不加历史条目，由数据管理页的元素打开', async () => {
-  const r = await load('/resource-sync');
-  surface(r, '/resource-sync');
-  serve({});
   const length = window.history.length;
-  const { actions } = await boot(r);
-  await until(() => location.pathname === '/data-cleanup', '改写到数据管理');
-  await until(() => vi.mocked(actions.surfaceChanged).mock.calls.length > 0, '数据管理页打开');
-  expect([location.hash, window.history.length - length]).toEqual(['#resource-sync', 0]);
-  expect(vi.mocked(actions.surfaceChanged).mock.calls).toEqual([['management', '/data-cleanup']]);
+  for (const path of ['/subscriptions', '/follow', '/taste', '/tasks', '/resource-sync', '/data-cleanup']) {
+    await act(async () => { r.shellNavigate(path, { replace: true }) });
+    await settle();
+    expect(location.pathname).toBe(path);
+    expect(r.managedEntry(stats)).toBeNull();
+  }
+  expect(api.fetched).not.toHaveBeenCalled();
+  expect(actions.surfaceChanged).not.toHaveBeenCalled();
+  expect(window.history.length).toBe(length);
 });
 
-it('配置页带 `#libraryProcessing` 进来：画上之后改写到数据管理页的那一块，不加历史条目', async () => {
+it('配置页入库锚点保持本地配置地址，不增加历史条目', async () => {
   const r = await load('/settings/library#libraryProcessing');
   const { stats } = surface(r, '/settings/library');
-  serve({ '/api/configuration': configuration });
+  serve({ '/api/configuration': configuration, '/api/library-processing': { status: 'idle' } });
   const length = window.history.length;
   const { actions } = await boot(r);
-  await until(() => vi.mocked(actions.surfaceChanged).mock.calls.length > 1, '数据管理页打开');
-  expect([location.pathname, location.hash, window.history.length - length]).toEqual(['/data-cleanup', '#libraryProcessing', 0]);
-  expect(vi.mocked(actions.surfaceChanged).mock.calls.map(([, path]) => path)).toEqual(['/settings/library', '/data-cleanup']);
+  await until(() => painted(stats) !== null, '媒体库配置画上');
+  expect([location.pathname, location.hash, window.history.length - length]).toEqual(['/settings/library', '#libraryProcessing', 0]);
+  expect(vi.mocked(actions.surfaceChanged).mock.calls.map(([, path]) => path)).toEqual(['/settings/library']);
   expect(stats.hidden).toBe(false);
 });
 
-it('诊断页的标题、管理区身份与换一批由路由元数据登记', async () => {
+it('网络配置页的标题、管理区身份与换一批由路由元数据登记', async () => {
   const r = await load();
-  expect(r.routeMetaOf('/settings/diagnostics')).toEqual({ section: 'configuration', title: '系统诊断', refresh: 'reopen' });
+  expect(r.routeMetaOf('/settings/network')).toEqual({ section: 'configuration', title: '网络与访问', refresh: 'reopen' });
+  expect(r.routeMetaOf('/settings/diagnostics')).toBeNull();
 });

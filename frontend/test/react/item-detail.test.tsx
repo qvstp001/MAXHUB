@@ -17,7 +17,7 @@ import { ItemDetailPage } from '../../src/react/item-detail/item-detail-page';
 import { detailPosterUrl } from '../../src/card-art';
 import { tagLabel } from '../../src/core/tags';
 import { queryClient } from '../../src/react/query';
-import { click, mount, pending, settle, type } from './render';
+import { click, mount, settle, type } from './render';
 
 afterEach(() => { queryClient.clear(); localStorage.removeItem('peach.recentTags') });
 notifyManager.setScheduler((notify) => notify());
@@ -363,6 +363,20 @@ describe('交给壳的', () => {
 });
 
 describe('写完之后', () => {
+  it('收藏与撤销更新详情缓存和按钮状态', async () => {
+    const fetcher = serve((_url, body) => ({ liked: !!body.liked, like_reason: '' }));
+    const { host, actions: done } = await show(item(1));
+    await click(host.querySelector('#likeBtn'));
+    await settle();
+    expect(host.querySelector('#likeBtn')?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('#likeBtn')?.getAttribute('aria-label')).toBe('取消收藏');
+    expect(done.toast.mock.calls[0]![0]).toBe('已加入收藏');
+    await done.toast.mock.calls[0]![1]!.undo!();
+    await settle();
+    expect(host.querySelector('#likeBtn')?.getAttribute('aria-pressed')).toBe('false');
+    expect(posts(fetcher).map(([, body]) => body.liked)).toEqual([true, false]);
+  });
+
   it('评分写进详情缓存与目录里同一张卡；回执的撤销送回原分', async () => {
     const fetcher = serve((_url, body) => ({ rating: body.value || null }));
     const page: InfiniteData<GridPage> = { pages: [{ items: [{ id: 1, rating: 60 } as MediaItem], offset: 0 } as GridPage], pageParams: [0] };
@@ -381,25 +395,26 @@ describe('写完之后', () => {
     expect(posts(fetcher).map(([, body]) => body.value)).toEqual([0, 60]);
   });
 
-  it('反馈的撤销再切一次回去，之后交给壳判垃圾文件那一档要不要重读', async () => {
-    const fetcher = serve((_url, body) => ({ feedback: body.kind === 'dislike' ? 'dislike' : null, disposal: null }));
+  it('观看状态的撤销切回未标记状态并通知列表', async () => {
+    const fetcher = serve((_url, body) => ({ feedback: body.kind === 'seen' ? 'seen' : null, disposal: null }));
     const { host, actions: done } = await show(item(1));
-    await click(host.querySelector('[data-kind="dislike"]'));
+    await click(host.querySelector('[data-kind="seen"]'));
     await settle();
-    expect(host.querySelector('[data-kind="dislike"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(done.toast.mock.calls[0]![0]).toBe('已标记不合口味');
+    expect(host.querySelector('[data-kind="seen"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(done.toast.mock.calls[0]![0]).toBe('已标记看过');
     await done.toast.mock.calls[0]![1]!.undo!();
-    expect(posts(fetcher).map(([, body]) => body.kind)).toEqual(['dislike', 'dislike']);
+    expect(posts(fetcher).map(([, body]) => body.kind)).toEqual(['seen', 'seen']);
     expect(done.trashChanged).toHaveBeenCalledWith(null, true);
   });
 
-  it('移入回收站之后交给壳：这一档可能要把它从列表里拿掉', async () => {
-    serve(() => ({ feedback: null, disposal: 'trash' }));
-    const { host, actions: done } = await show(item(1));
-    await click(host.querySelector('[data-kind="dispose"]'));
-    await settle();
-    expect(done.trashChanged).toHaveBeenCalledWith('trash', false);
-    expect(done.toast.mock.calls[0]![0]).toBe('已移入回收站');
+  it('详情动作集中于收藏、播放列表与观看状态', async () => {
+    serve();
+    const { host } = await show(item(1));
+    expect(host.querySelector('#likeBtn')).not.toBeNull();
+    expect(host.querySelector('#stageLater')).not.toBeNull();
+    expect(host.querySelector('#addPlaylist')).not.toBeNull();
+    expect(host.querySelector('[data-kind="seen"]')).not.toBeNull();
+    expect(host.querySelector('[data-kind="dispose"], #betterVersion, #preferenceToggle')).toBeNull();
   });
 
   it('删标签写进缓存；撤销加回来', async () => {
@@ -424,54 +439,21 @@ describe('写完之后', () => {
     expect(host.querySelector('#stageLater')?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('寻找更好版本与记一次高潮：回执的撤销各自写回', async () => {
-    const fetcher = serve((url, body) => (url === '/api/quality-goal'
-      ? { better_version: !!body.wanted, better_version_reason: '' }
-      : { feedback: null, disposal: null, o_count: body.kind === 'o' ? 2 : 1 }));
+  it('观看记录写回与撤销都更新详情', async () => {
+    const fetcher = serve((_url, body) => ({ feedback: null, disposal: null, o_count: body.kind === 'o' ? 2 : 1 }));
     const { host, actions: done } = await show(item(1, { o_count: 1 }));
-    await click(host.querySelector('#betterVersion'));
-    await settle();
-    expect(host.querySelector('#betterVersion')?.getAttribute('aria-pressed')).toBe('true');
-    expect(done.toast.mock.calls[0]![0]).toBe('已标记寻找更好版本');
-    await done.toast.mock.calls[0]![1]!.undo!();
-    await settle();
-    expect(host.querySelector('#betterVersion')?.getAttribute('aria-pressed')).toBe('false');
     await click(host.querySelector('[data-kind="o"]'));
     await settle();
     expect(host.querySelector('#oCount')?.textContent).toBe('2');
-    await done.toast.mock.calls[1]![1]!.undo!();
+    await done.toast.mock.calls[0]![1]!.undo!();
     await settle();
     expect(host.querySelector('#oCount')?.textContent).toBe('1');
-    expect(posts(fetcher).map(([url, body]) => [url, body.wanted ?? body.kind])).toEqual([
-      ['/api/quality-goal', true], ['/api/quality-goal', false], ['/api/feedback', 'o'], ['/api/feedback', 'o-undo'],
+    expect(posts(fetcher).map(([url, body]) => [url, body.kind])).toEqual([
+      ['/api/feedback', 'o'], ['/api/feedback', 'o-undo'],
     ]);
   });
 
-  it('喜爱理由：图标键开合理由框；提交时键上转圈，写完回执', async () => {
-    const reply = pending<unknown>();
-    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => reply.answer }));
-    vi.stubGlobal('fetch', fetcher);
-    const { host, actions: done } = await show(item(1));
-    const panel = host.querySelector<HTMLElement>('#preferencePanel')!;
-    const toggle = host.querySelector('#preferenceToggle')!;
-    expect(panel.hidden).toBe(true);
-    await click(toggle);
-    expect(panel.hidden).toBe(false);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    await typeText(host.querySelector('#likeReason'), '镜头好');
-    await click(host.querySelector('#savePreference'));
-    const save = host.querySelector('#savePreference')!;
-    expect(save.getAttribute('aria-busy')).toBe('true');
-    expect(save.querySelector('[role="status"]')?.getAttribute('aria-label')).toBe('正在提交喜爱理由');
-    await reply.release({ liked: true, like_reason: '镜头好' });
-    await settle();
-    expect(save.getAttribute('aria-busy')).toBeNull();
-    expect(save.textContent).toBe('提交');
-    expect(done.toast.mock.calls[0]![0]).toBe('已保存喜欢偏好');
-    expect(posts(fetcher)).toEqual([['/api/preference', { id: 1, liked: true, reason: '镜头好' }]]);
-    await click(toggle);
-    expect(panel.hidden).toBe(true);
-  });
+
 });
 
 /** 两个节点在文档里的先后：`a` 排在 `b` 前面。 */
@@ -479,13 +461,6 @@ const before = (a: Element | null, b: Element | null) =>
   !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 const glyph = (el: Element | null | undefined) => el?.querySelector('use')?.getAttribute('href');
 
-async function typeText(field: HTMLTextAreaElement | null, value: string) {
-  if (!field) throw new Error('输入框没有画出来');
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, value);
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
 
 describe('侧栏怎么读', () => {
   it('评分夹在标题与规格行之间，当前那一颗的读屏名说的是撤销；规格行每项前面是图标', async () => {
@@ -568,8 +543,8 @@ describe('侧栏怎么读', () => {
     serve();
     queryClient.setQueryData(queueKey({ kind: 'mix', seedId: 1 }), queue('mix', [1, 2]));
     const mix = await show(item(1, { liked: true }), { queue: { kind: 'mix', seedId: 1 } });
-    expect(glyph(mix.host.querySelector('#preferenceToggle'))).toBe('#i-notebook-pen');
-    expect(mix.host.querySelector('#likeBtn')?.getAttribute('aria-label')).toBe('取消喜欢');
+    expect(mix.host.querySelector('#preferenceToggle')).toBeNull();
+    expect(mix.host.querySelector('#likeBtn')?.getAttribute('aria-label')).toBe('取消收藏');
     expect(glyph(mix.host.querySelector('#addPlaylist'))).toBe('#i-playlist');
     expect(glyph(mix.host.querySelector('[data-save-mix]'))).toBe('#i-playlist');
     expect(glyph(mix.host.querySelector('[data-kind="o"]'))).toBe('#i-sperm');

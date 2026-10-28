@@ -8,8 +8,7 @@
 | `routes_auth` | 口令闸门与登录页，三个 `require_*` 依赖 |
 | `routes_pages` | 单页界面、静态资产与全部前端路由落点 |
 | `routes_configuration` | 本机配置与账号设置 |
-| `routes_jav_browser` | JAV 用户脚本的专用权限、添加与状态查询 |
-| `routes_media` | 播放、分片、缩图、封面、头像、外链圆标 |
+| `routes_media` | 播放、分片、缩图、封面与本地头像 |
 | `routes_subtitles` | 字幕转换、SubtitleCat 与迅雷字幕库搜索及加载 |
 | `routes_api` | JSON 契约出口，含两条 `/api/{route:path}` catch-all |
 
@@ -34,16 +33,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 
-from . import (__version__, browser_transport, feeds, tunnel, web_batch, web_contract,
-               web_feeds, web_follow, web_settings)
-from . import routes_api, routes_auth, routes_configuration, routes_jav_browser, routes_media, routes_pages, routes_subtitles
+from . import __version__, tunnel, web_contract
+from . import routes_api, routes_auth, routes_configuration, routes_media, routes_pages, routes_subtitles
 from .buildinfo import frozen_build
-from .config import LOCATION_ROOT_DECLARATIONS, PeachSettings
+from .config import PeachSettings
 from .ffmpeg import FFmpegResolver
-from .follow_scheduler import FEED_JOB_ID, FollowScheduleConfig, FollowUpdateScheduler
-from .follow_covers import FollowCoverService
-from .follow_faces import FollowFaceIndex
-from .follow_stream import FollowMediaResolver
 from .http import HttpxTransport
 from .health import inspect_database
 from .media import (
@@ -53,10 +47,8 @@ from .media import (
     MediaOffline,
     MediaUnavailable,
 )
-from .mdns import create_mdns_publisher
 from .mount_reachability import MountReachability
 from .mp4repair import HeaderRepairStore
-from .platform import location_mounts
 from .previews import (
     COVER_THUMB_EDGE,
     COVER_THUMB_QUALITY,
@@ -66,12 +58,8 @@ from .previews import (
     cover_thumb_root,
     entity_thumb_root,
 )
-from .follow_secrets import credential_store_for
-from .push_discovery import PushDiscoveryService
-from .web_downloads import build_download_service
 from .sample_images import SampleCache
 from .sample_images import cache_root as sample_cache_root
-from .providers import OpenCodeGoClient, default_registry
 from .repository import LedgerDatabase, LedgerRepository
 from .review_mirror import ReviewMirror
 from .routes_auth import AssetLoginRequired, PageLoginRequired
@@ -134,62 +122,16 @@ def _start_tunnel(settings: PeachSettings, manager: tunnel.TunnelManager) -> Non
         LOGGER.warning("Cloudflare Tunnel 未能启动", exc_info=True)
 
 
-def _restore_task_center(contract) -> None:
-    """开机时收拾任务中心。
-
-    上一次服务被强杀的话，表里会留下几行停在 `running` 的记录，它们还占着互斥键——不先
-    收掉，这一次开机后那几类任务一按就是 409。判据是 pid 还在不在与心跳有没有过期，两样
-    都不满足才算被打断。
-
-    后继是例外：它重新排队而不判 `interrupted`，冻在终态就再也没有重试的机会
-    （ADR-0040 第六条）。排着的那些也在这一步被叫醒，接着跑完。
-    """
-    from .job_recovery import reconcile_paused
-    if contract.task_runs.enabled:
-        reconcile_paused(contract.db_path)
-    recovered = contract.task_runs.recover_interrupted()
-    if recovered:
-        LOGGER.info("task center recovered %s interrupted run(s)", len(recovered))
-    requeued = contract.task_runs.enabled and contract.followups.resume()
-    if requeued:
-        LOGGER.info("task center requeued %s followup(s)", len(requeued))
-
-
-#: 开机在后台先算一遍的聚合：口味、复核、垃圾复核、关注的全部条目与筛选项各要几秒到
-#: 十几秒，都按账本版本号缓存（`WebContract.cached_until_changed`），算好一次就一直用到
-#: 账本或文件真的变了。
-WARM_AGGREGATES = (("/api/taste", {"window": "all"}), ("/api/review", {}), ("/api/ads", {}),
-                   ("/api/follow", {}))
-
-
 def _start_ledger_services(settings: PeachSettings, contract, services) -> bool:
-    """只读核对当前账本后，恢复任务并启动依赖账本的后台服务。"""
+    """只读核对当前账本，历史任务由用户明确发起后才执行。"""
     status = inspect_database(settings.db_path)
     if not status["readable"] or status["schema"] != "current":
         LOGGER.warning("数据库未就绪，依赖数据库的后台任务保持停止（数据库：%s；结构：%s）；数据库准备完成后重启服务。",
                        status["database"], status["schema"])
         return False
-    _restore_task_center(contract)
-    from .web_job_recovery import restore
-    if contract.task_runs.enabled:
-        restore(contract)
     for service in services:
         service.start()
     return True
-
-
-async def _warm_ledger_aggregates(ledger_ready: bool, contract, stopping: asyncio.Event) -> None:
-    """走和真实请求同一条分派，缓存键一致，页面第一次打开就是现成的。"""
-    if not ledger_ready:
-        return
-    for path, args in WARM_AGGREGATES:
-        if stopping.is_set():
-            return
-        try:
-            await asyncio.to_thread(web_contract.dispatch_api_get, contract, path, args)
-        except Exception:
-            # 预热失败不影响服务启动，这一页照旧在第一次打开时自己算。
-            LOGGER.debug("aggregate warmup failed: %s", path, exc_info=True)
 
 
 def _server_error_headers(request: Request, error: Exception, status_code=500):
@@ -233,22 +175,11 @@ def create_app(
         taste_history_manifest=settings.taste_history_manifest,
         database=database,
     )
-    contract.download_junk_candidates = lambda: web_batch.automatic_junk_candidates(contract)
-    contract.download_organize_templates = lambda: web_settings.organize_templates(contract)
     repository = LedgerRepository(database)
     from .mount_reachability import source_roots
     mount_reachability = MountReachability(source_roots())
     resolver = FFmpegResolver(settings.ffmpeg_root)
     http_transport = HttpxTransport()
-    follow_media_resolver = FollowMediaResolver(http_transport).with_credential_loader(
-        lambda provider: web_follow._credential_store(contract).load(provider))
-    # 检查更新、浏览与画面签名的取图共用这一份按站冷却：同一个站被限流，几处都得停。
-    contract.follow_media_resolver = follow_media_resolver
-    follow_cover_service = FollowCoverService(
-        resolver, follow_media_resolver, settings.poster_root / "follow")
-    contract.follow_faces = FollowFaceIndex(
-        settings.poster_root / "follow-faces", http_transport,
-        cover_root=settings.poster_root / "follow", gate=follow_media_resolver)
     filesystem = FilesystemBackend(
         settings.allowed_media_roots,
         settings.snapshot_root,
@@ -275,12 +206,12 @@ def create_app(
         resolver, settings.stream_root, prefer_hardware=transcode_service.prefer_hardware,
         hardware=transcode_service.hardware,
     )
-    mdns = create_mdns_publisher(
-        settings.mdns_name, settings.mdns_port, secure=settings.tls_enabled,
-        address=settings.mdns_address,
-    ) if settings.mdns_enabled else None
-    providers = default_registry()
-    opencode_go = OpenCodeGoClient(transport=http_transport)
+    mdns = None
+    if settings.mdns_enabled:
+        from .mdns import create_mdns_publisher
+        mdns = create_mdns_publisher(
+            settings.mdns_name, settings.mdns_port, secure=settings.tls_enabled,
+            address=settings.mdns_address)
     review_mirror = review_mirror or ReviewMirror(
         settings.review_writer_origin,
         settings.review_writer_ca,
@@ -288,50 +219,6 @@ def create_app(
         token=settings.token,
         proxy=settings.review_writer_proxy,
     )
-    follow_scheduler = FollowUpdateScheduler(
-        settings.follow_state_root,
-        lambda: web_follow.w_follow_check(contract, {"automatic": True}),
-        available=sync is None or not sync.read_only,
-    )
-    push_discovery = PushDiscoveryService(
-        state_root=settings.follow_state_root,
-        secrets_root=settings.secrets_root,
-        db_path=settings.db_path,
-        declared_roots=LOCATION_ROOT_DECLARATIONS,
-        mounts=location_mounts(),
-        available=_writer(sync),
-        ffprobe=resolver.ffprobe,
-        after_ingest=contract.cache_bust,
-    )
-    # 云下载：远端完成后的文件由推送发现登记，这里只对账与兜底定向登记。凭据只在本机。
-    from .download_postprocess import enqueue as enqueue_download_postprocess
-    downloads = build_download_service(
-        database=database, state_root=settings.follow_state_root,
-        credentials=credential_store_for(settings.secrets_root,
-                                         shared_root=contract.follow_shared_root),
-        push_discovery=push_discovery, available=_writer(sync),
-        after_ingest=lambda task: enqueue_download_postprocess(contract, task))
-    contract.downloads = downloads
-    from .jav_browser import JavBrowser
-    from .web_resource_search import q_resource_search
-    jav_browser = JavBrowser(contract, search=q_resource_search)
-    contract.follow_scheduler = follow_scheduler
-    # 订阅源拉取（ADR-0042）用同一个调度实现，只换 job id、状态文件与默认间隔。
-    # 默认 6 小时：一位女优的 JavDB 演员页一天更新几条，比这更密只是把 JavDB 的配额
-    # 花在一张没变的页面上。
-    feed_scheduler = FollowUpdateScheduler(
-        settings.follow_state_root,
-        lambda: web_feeds.w_feed_check(contract, {"automatic": True}),
-        available=_writer(sync),
-        job_id=FEED_JOB_ID,
-        filename="feed-schedule.json",
-        default=FollowScheduleConfig(enabled=True,
-                                     interval_minutes=feeds.DEFAULT_INTERVAL_MINUTES),
-        unavailable_message="订阅源拉取只在写入端可用",
-    )
-    contract.feed_scheduler = feed_scheduler
-    from .web_job_recovery import RecoveryService
-    recovery_service = RecoveryService(contract, available=_writer(sync))
     contract.header_repairs = header_repairs
     contract.transcode_service = transcode_service
     # 只读端不写任务中心：`task_run` 也在账本里，reader 往里写会造成无法自动合并的
@@ -345,7 +232,7 @@ def create_app(
     from .routes_configuration import managed_configuration
     automatic_updates = AutomaticUpdates(
         settings.follow_state_root,
-        available=managed_configuration() and bool(settings.configured),
+        available=False,
     )
 
     async def warm_startup_entries():
@@ -376,15 +263,11 @@ def create_app(
         ledger_ready = False
         if settings.configured:
             ledger_ready = _start_ledger_services(settings, contract,
-                (follow_scheduler, feed_scheduler, push_discovery, downloads, recovery_service, jav_browser))
+                ())
             automatic_updates.start()
-            if ledger_ready:
-                sharing.start()
             mount_reachability.start()
         _app.state.ledger_background_ready = ledger_ready
         warmup = asyncio.create_task(warm_startup_entries())
-        aggregate_stop = asyncio.Event()
-        aggregate_warmup = asyncio.create_task(_warm_ledger_aggregates(ledger_ready, contract, aggregate_stop))
         if mdns is not None:
             try:
                 await asyncio.to_thread(mdns.start)
@@ -395,20 +278,11 @@ def create_app(
             yield
         finally:
             _app.state.ledger_background_ready = False
-            aggregate_stop.set()
             loop.set_exception_handler(previous_error_handler)
             warmup.cancel()
-            recovery_service.stop()
-            follow_scheduler.stop()
-            feed_scheduler.stop()
             automatic_updates.stop()
             await asyncio.to_thread(sharing.stop)
-            push_discovery.stop()
-            await asyncio.to_thread(jav_browser.stop)
-            downloads.stop()
             mount_reachability.stop()
-            # to_thread 的查询在线程内释放连接后才算结束。
-            await aggregate_warmup
             # 死链检查和资源对账的后台线程是 daemon，本来挡不住进程退出；这里显式收
             # 一下，免得在途的那一轮在解释器拆卸期间还继续查库、往没人读的状态里写。
             contract.stop_background_jobs()
@@ -442,17 +316,9 @@ def create_app(
     app.state.hls_plan_executor = hls_plan_executor
     app.state.hls_service = hls_service
     app.state.mdns = mdns
-    app.state.providers = providers
-    app.state.opencode_go = opencode_go
     app.state.review_mirror = review_mirror
     app.state.http_transport = http_transport
-    app.state.follow_media_resolver = follow_media_resolver
-    app.state.follow_cover_service = follow_cover_service
-    app.state.follow_scheduler = follow_scheduler
     app.state.automatic_updates = automatic_updates
-    app.state.push_discovery = push_discovery
-    app.state.downloads = downloads
-    app.state.jav_browser = jav_browser
     app.state.mount_reachability = mount_reachability
     app.state.stream_sessions = StreamSessionRegistry()
     from .strm_stream import StrmResources
@@ -583,8 +449,7 @@ def create_app(
                 "ledger_read_only_message": sync.read_only_message if read_only else None,
                 "ledger_writer_origin": settings.review_writer_origin if read_only else None,
                 "scheme": "https" if settings.tls_enabled else "http",
-                # 采集用的浏览器窗口正等着人点验证的站，供排查时看一眼；窗口本身就是提醒，不另弹通知（ADR-0065）。
-                "attention": browser_transport.attention(),
+                "attention": [],
                 # 健康检查可能被公网探针访问，不能在这里回传随机 Tunnel URL。
                 "tunnel": {"enabled": settings.tunnel_enabled, "state": tunnel_state.state},
         }
@@ -594,7 +459,6 @@ def create_app(
     app.include_router(routes_auth.router)
     app.include_router(routes_pages.router)
     app.include_router(routes_configuration.router)
-    app.include_router(routes_jav_browser.create_router(routes_configuration.local_only))
     app.include_router(routes_media.router)
     app.include_router(routes_subtitles.router)
     app.include_router(routes_api.router)

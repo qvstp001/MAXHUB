@@ -9,25 +9,18 @@
  * 从 DOM 里摘掉、人脸放大（`avatarFrame`）往图上写内联尺寸、等待微光挂在图的父元素上，这几样
  * 都直接改节点，所以那几格用 `dangerouslySetInnerHTML`，React 不拥有里面的节点。 */
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { entityFaceImg, facePos } from '@peach/card-art';
 import { entityPath, esc, firstGrapheme, icon } from '@peach/legacy/core';
 
-import { Button } from '@/components/base/buttons/button';
 
-import { AvatarPicker } from '../avatar-picker/avatar-picker-page';
-import { Note } from '../components/note';
-import { PerformerScrapeControls } from '../performer-scrape/performer-scrape';
 import { FavoriteButton } from '../library-shortcuts/shortcut-controls';
-import { busyProps } from '../settings/busy-props';
-import { FeedNewRow } from '../feed-new/feed-new-row';
 import { Glyph } from './glyph';
-import { FeedSwitch, MorePop } from './hero-pop';
+import { MorePop } from './hero-pop';
 import { NamePicker } from './name-picker';
 import {
-  COMPANY_ALIASES_SHOWN, agencyOf, companyFactRows, entityFeedTip, entryMarks, factRows, heroLinks, isCompany, isPeople, nameChoices, nameLine, shownTags,
+  COMPANY_ALIASES_SHOWN, agencyOf, companyFactRows, factRows, heroLinks, isCompany, isPeople, nameChoices, nameLine, shownTags,
   type EntityHeroActions, type EntityHeroData, type EntityHeroHelpers, type EntityHeroProps,
-  type HeroCostar, type HeroFollow, type LinkMark, type LinkView,
+  type HeroCostar, type LinkMark, type LinkView,
 } from './entity-hero';
 
 /** 同台艺人圆框里那张图：实体图优先，退到代表作头像，按检出的人脸取景。 */
@@ -38,12 +31,11 @@ function costarImg(person: HeroCostar): string {
   });
 }
 
-export function EntityHeroPage({ kind, name, entity, feedNew, feedHost, actions, helpers }: EntityHeroProps) {
+export function EntityHeroPage({ kind, name, entity, actions, helpers }: EntityHeroProps) {
   const people = isPeople(kind);
   const company = isCompany(kind);
   const facts = people ? factRows(entity.profile) : company ? companyFactRows(entity.company_profile) : [];
   const links = heroLinks(entity, kind);
-  const marks = entryMarks(entity);
   const costars = kind === 'agency' ? [] : (entity.related_performers || []);
   const linkRow = useRef<HTMLDivElement>(null);
   const costarRow = useRef<HTMLDivElement>(null);
@@ -58,12 +50,6 @@ export function EntityHeroPage({ kind, name, entity, feedNew, feedHost, actions,
         <div data-entity-profile={facts.length ? 'facts' : ''}>
           <div data-entity-portrait-wrap="">
             <Portrait kind={kind} name={name} helpers={helpers} people={people} company={company} />
-            {people && entity.id ? (
-              <span data-avatar-picker="">
-                <AvatarPicker kind={kind} entityId={Number(entity.id)} name={entity.canonical_name || name}
-                  onPicked={actions.avatarPicked} />
-              </span>
-            ) : null}
           </div>
           <div data-entity-identity="">
             <div data-entity-title="">
@@ -73,8 +59,6 @@ export function EntityHeroPage({ kind, name, entity, feedNew, feedHost, actions,
               {entity.id ? <FavoriteButton item={{ entity_id: Number(entity.id), kind, name: entity.canonical_name || name, favorite: entity.favorite }} /> : null}
             </div>
             <AliasLine kind={kind} entity={entity} actions={actions} />
-            {kind === 'performer' && entity.id ? <PerformerScrapeControls entityId={Number(entity.id)}
-              name={entity.canonical_name || name} receipt={helpers.receipt} onComplete={actions.avatarPicked} /> : null}
             {entity.related_identities?.length ? (
               <div className="flex min-w-0 flex-wrap gap-2 text-caption-1-regular text-text-secondary">
                 {/* 账号名常是一长串无空格的英文，窄屏下得能在任意处折行。 */}
@@ -93,8 +77,8 @@ export function EntityHeroPage({ kind, name, entity, feedNew, feedHost, actions,
             {links.length ? (
               <div ref={linkRow} data-entity-links="">{links.map((link, at) => <HeroLinkView key={at} link={link} />)}</div>
             ) : null}
-            {marks.length || entity.feed ? <EntryMarks entity={entity} actions={actions} helpers={helpers} /> : null}
-            {entity.follow?.held.length ? <HeldAuthors follow={entity.follow} entity={entity} actions={actions} /> : null}
+
+
           </div>
           {facts.length ? (
             <dl data-entity-facts="">
@@ -126,9 +110,6 @@ export function EntityHeroPage({ kind, name, entity, feedNew, feedHost, actions,
           </div>
         ) : null}
       </section>
-      {/* 新作那一行摆在壳留好的 `section.feednew[data-feed-new]` 里，与首页那一行同一个组件。 */}
-      {feedHost ? createPortal(<FeedNewRow feedNew={feedNew} host={feedHost} wire={helpers.wireFeedRow}
-        act={(feedId, action) => actions.feedAction(feedId, action)} />, feedHost) : null}
     </>
   );
 }
@@ -163,7 +144,7 @@ function AliasLine({ kind, entity, actions }: { kind: string; entity: EntityHero
       <div data-entity-alias="meta">
         <IdentityMeta entity={entity} />
         <span data-meta-item="" title="视频"><Glyph name="film" /><span>{count}</span></span>
-        {entity.follow?.key ? <FollowMeta follow={entity.follow} actions={actions} /> : null}
+
         {agencyNode ? <span data-meta-item="" title="事务所"><Glyph name="briefcase" /><span>{agencyNode}</span></span> : null}
         {line ? (
           <div data-meta-item="names">
@@ -222,50 +203,6 @@ function CompanyAliases({ aliases }: { aliases: string[] }) {
 
 /** 关注里绑在这位名下的来源：读数是还没入库的更新，整段是站内去处（同事务所链接的钨蓝），
  *  点开切到这一页的在线视图。 */
-function FollowMeta({ follow, actions }: { follow: HeroFollow; actions: EntityHeroActions }) {
-  const from = follow.providers.join(' · ');
-  return (
-    <span data-meta-item="" data-entity-follow="" title={from ? `关注 · ${from}` : '关注'}>
-      <Glyph name="rss" />
-      <a href="?media=online" onClick={(event) => { event.preventDefault(); actions.openFollowAuthor(follow.key) }}>
-        {follow.n.toLocaleString()} 项更新
-      </a>
-    </span>
-  );
-}
-
-/** 关注里有同名作者、还没认是不是同一个人：每组一条提示，认了才把那组来源绑到这位名下。
- *  名字相同不算证据（ADR-0095），所以这里只问，不替人绑。 */
-function HeldAuthors({ follow, entity, actions }: {
-  follow: HeroFollow; entity: EntityHeroData; actions: EntityHeroActions;
-}) {
-  const [busy, setBusy] = useState('');
-  const confirm = async (key: string, name: string) => {
-    if (busy) return;
-    setBusy(key);
-    try {
-      await actions.confirmFollowAuthor(key, name);
-    } catch {
-      /* 失败回执由壳发，按钮回到可按。 */
-    } finally {
-      setBusy('');
-    }
-  };
-  return (
-    <div data-entity-held="" className="flex flex-col gap-2">
-      {follow.held.map((group) => (
-        <Note key={group.key} tone="info" title={`关注里有同名作者 ${group.name}`}
-          action={<Button size="small" {...busyProps(busy === group.key)}
-            onClick={() => { void confirm(group.key, group.name) }}>是同一个人</Button>}>
-          {[group.providers.join(' · '), `${group.n.toLocaleString()} 项更新`].filter(Boolean).join(' · ')}
-          。和 {entity.canonical_name} 是同一个人吗？
-        </Note>
-      ))}
-    </div>
-  );
-}
-
-/** 分类位于身份行的第一项。 */
 function IdentityMeta({ entity }: { entity: EntityHeroData }) {
   if (!entity.identity_labels?.length) return null;
   return (
@@ -361,43 +298,3 @@ function HeroLinkView({ link }: { link: LinkView }) {
  *
  *  MISSAV 站上没有图形标识，它的标题就是排出来的字：Halant 500、`MISS` 跟页面墨色、`AV` 用
  *  它的粉。一位女优在 javdb 有两个演员页是常事，第二枚在标识后面缀服务端编好的序号。 */
-function EntryMarks({ entity, actions, helpers }: {
-  entity: EntityHeroData; actions: EntityHeroActions; helpers: EntityHeroHelpers;
-}) {
-  const [following, setFollowing] = useState(!!entity.feed?.following);
-  const [busy, setBusy] = useState(false);
-  const busyRef = useRef(false);
-  /* 写回失败时开关留在原位，失败回执由壳发；成功才发过去时的回执，撤销是另一次真实写回。 */
-  const write = async (on: boolean): Promise<boolean> => {
-    if (busyRef.current) return false;
-    busyRef.current = true;
-    setBusy(true);
-    try {
-      await actions.follow(on);
-      setFollowing(on);
-      return true;
-    } catch {
-      return false;
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
-  };
-  const toggle = async (on: boolean) => {
-    if (!await write(on)) return;
-    helpers.receipt(on ? '已订阅新作' : '已取消订阅新作', { undo: async () => { await write(!on) } });
-    if (on) actions.refreshFeedAfterCheck();
-  };
-  return (
-    <div data-entry-marks="">
-      {entryMarks(entity).map((mark, at) => (
-        <a key={at} data-entry-mark="" href={mark.url} target="_blank" rel="noreferrer" title={mark.label} aria-label={mark.label}>
-          {mark.mark ? <Glyph name={mark.mark} /> : <span data-missav-mark=""><span>MISS</span><span>AV</span></span>}
-          {mark.ordinal ? <span data-entry-ordinal="">{mark.ordinal}</span> : null}
-        </a>
-      ))}
-      {entity.feed ? <FeedSwitch following={following} busy={busy} onToggle={(on) => { void toggle(on) }}
-        tip={entityFeedTip(following)} /> : null}
-    </div>
-  );
-}

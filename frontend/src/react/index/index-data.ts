@@ -144,8 +144,8 @@ export function indexRoute(route: IndexRoute): IndexRoute {
   if (route.kind === 'creators' && route.category === 'animation') {
     return indexRoute({ ...route, kind: 'performers', scope: 'local' });
   }
-  const scope = route.kind === 'tags' || route.kind === 'performers' ? route.scope : 'local';
-  const categories = route.kind === 'tags' ? (scope === 'online' ? ONLINE_TAG_CATEGORIES : TAG_CATEGORIES)
+  const scope = 'local';
+  const categories = route.kind === 'tags' ? TAG_CATEGORIES
     : route.kind === 'performers' && scope === 'local' ? IDENTITY_CATEGORIES : [];
   const known = categories.some(([key]) => key === route.category);
   return { ...route, scope, category: known ? route.category : 'all' };

@@ -10,12 +10,8 @@ import { createRoot } from 'react-dom/client';
 import type { NavigateFunction } from 'react-router';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 
-import type {
-  ConfigurationProps, DataCleanupProps, DuplicatesProps, FollowManageProps, QualityGoalsProps, ReviewProps,
-  ScrapingProps, StatsProps, TasteProps,
-} from '../../src/react/bundle';
+import type { StatsProps } from '../../src/react/bundle';
 import type { ShellActions } from '../../src/react/router/shell-actions';
-import type { DiagnosticsProps } from '../../src/react/diagnostics/diagnostics-page';
 
 // 首次导入会编译路由表带进来的整棵页面子树，编译等待使用独立的有限窗口；之后每条用例重新装载只重跑模块。
 const REACT_IMPORT_TIMEOUT_MS = 30_000;
@@ -73,14 +69,36 @@ function surface() {
 }
 
 /** 活动页首屏那一份 `/api/tasks`：只有一轮刚跑完的，名字用来认出画的是哪一次取回来的。 */
-const tasks = (label = '追更检查') => ({
-  available: true, running: [], skipped: [],
-  finished: [{
-    id: 1, task_key: 'follow-check', task_label: label, trigger: 'manual', status: 'succeeded', host: 'desk',
-    started_at: '2026-09-11T10:00:00Z', finished_at: '2026-09-11T10:00:05Z', elapsed_seconds: 5,
-    progress_current: null, progress_total: null, progress_label: '', result_summary: {}, error: '',
-    parent_run_id: null, root_run_id: null, followup_key: '', followup_depth: 0,
+const tasks = (label = '馆藏测试') => ({
+  by_loc: [{ k: 'local', n: 3, bytes: 3221225472, videos: 3 },
+    { k: '115', n: 1, bytes: 1073741824, videos: 1 }],
+  by_medium: [{ k: 'video', n: 4, bytes: 4294967296 }, { k: 'image', n: 6, bytes: 1048576 }],
+  by_library: [{ k: 'main', name: '主库', icon: 'film', videos: 4, bytes: 4294967296 }],
+  by_length: [{ k: '速食', n: 1 }, { k: '短', n: 3 }, { k: '中', n: 0 }, { k: '长', n: 0 }],
+  by_quality: [{ k: '4K', n: 0 }, { k: '2K', n: 0 }, { k: '1080P', n: 4 }, { k: '720P', n: 0 }, { k: '低画质', n: 0 }],
+  play_activity: {
+    timezone: 'UTC+08:00',
+    days: [{ date: '2026-09-20', count: 1 }, { date: '2026-09-22', count: 1 }],
+    hours: [{ weekday: 0, hour: 23, count: 1 }, { weekday: 6, hour: 8, count: 1 }],
+  },
+  replays: [{ k: 1, n: 1 }, { k: 3, n: 1 }],
+  attribution: { videos: 4, creator: 3, code: 2, studio: 1, thumb: 4, duration: 4 },
+  tag_source: [{ k: 'javdb', n: 12, assets: 3 }],
+  tag_cov: 2,
+  top_tags: [{ k: label, n: 1, cat: 'general' }],
+  consumption: {
+    played: 2, library_played: 1, online_played: 1, play_seconds: 7200,
+    o_total: 5, liked: 1, dislike: 1, seen: 2, trash: 0, skimmed: 1,
+  },
+  recent: [{
+    id: 42, name: 'one.mp4', creator: '甲', play_seconds: 600,
+    duration: 1200, max_reached: 0.9, o_count: 0, kind: 'library',
   }],
+  storage_volumes: [{
+    kind: 'media', label: 'R:', root: 'R:\\media', online: true,
+    free: 1073741824, used: 3221225472, total: 4294967296,
+  }],
+  storage_summary: { volumes: 1, online: 1, measured: 1, free: 1073741824, used: 3221225472, total: 4294967296 },
 });
 const DOWNLOADS = { available: true, providers: [], tasks: [] };
 type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
@@ -99,7 +117,7 @@ function tasksFetch(body: unknown = tasks(), { deferred = true } = {}) {
       signal?.addEventListener('abort', () => { reject(new DOMException('已中止', 'AbortError')) });
     });
   });
-  const taskCalls = () => fetched.mock.calls.filter(([input]) => input.startsWith('/api/tasks')).length;
+  const taskCalls = () => fetched.mock.calls.filter(([input]) => input.startsWith('/api/stats')).length;
   return {
     fetched, taskCalls,
     resolve: () => { for (const settle of pending.splice(0)) settle() },
@@ -109,7 +127,7 @@ function tasksFetch(body: unknown = tasks(), { deferred = true } = {}) {
 }
 
 /** 每一批 DOM 变化交付时容器里的样子：骨架还在不在、整页画出来没有。 */
-function watch(stats: Element, skeleton: Element, label = '追更检查') {
+function watch(stats: Element, skeleton: Element, label = '馆藏测试') {
   const batches: Array<{ skeleton: boolean; painted: boolean }> = [];
   const observer = new MutationObserver(() => {
     batches.push({ skeleton: stats.contains(skeleton), painted: Boolean(stats.textContent?.includes(label)) });
@@ -130,7 +148,7 @@ async function until(ok: () => boolean, what: string): Promise<void> {
 /* 这里直接调打开管线：用例把地址落在首页或不交壳的动作，管理区的页面元素不打开（元素怎么打开见
    `pages/managed.test.tsx`）。 */
 const open = (r: Loaded, stats: Element, isCurrent = () => true) =>
-  r.openManagedRoute('/tasks', {}, { container: stats, isCurrent });
+  r.openManagedRoute('/stats', {}, { container: stats, isCurrent });
 /** 页面画出来的那一块（宿主里的第一个元素）：重挂之后就换成另一个。 */
 const painted = (stats: Element) => stats.querySelector(':scope > .peach-react > *');
 
@@ -150,7 +168,7 @@ it('冷启动深链，Router 先挂上：壳画的骨架留到首屏取齐，换
   await act(async () => { expect(await opened).toBe(true) });
   expect(fetch.taskCalls()).toBe(1);
   expect(batches[0], '骨架撤下的那一批变化里整页已经画好，中间没有空白的一帧').toEqual({ skeleton: false, painted: true });
-  expect(stats.querySelector(':scope > .peach-react')?.textContent).toContain('追更检查');
+  expect(stats.querySelector(':scope > .peach-react')?.textContent).toContain('馆藏测试');
 });
 
 it('冷启动深链，壳先打开、Router 后挂上：包到了才取数，骨架同样留到换成整页', async () => {
@@ -176,7 +194,7 @@ it('冷启动深链，壳先打开、Router 后挂上：包到了才取数，骨
 });
 
 it('应用内切页：在途那一次被收起时不动容器，壳留着的同一张骨架等到下一次打开才换掉', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats, skeleton } = surface();
   await mount(r);
   r.connectManagedRoutes(Promise.resolve(r.prefetchManagedRoute));
@@ -202,7 +220,7 @@ it('应用内切页：在途那一次被收起时不动容器，壳留着的同�
 });
 
 it('取数期间壳换了页就不画，骨架留给下一页', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats, skeleton } = surface();
   await mount(r);
   r.connectManagedRoutes(Promise.resolve(r.prefetchManagedRoute));
@@ -219,7 +237,7 @@ it('取数期间壳换了页就不画，骨架留给下一页', async () => {
 });
 
 it('同一路径再打开一次就重取：每次打开领一个新代次，页面重挂', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats } = surface();
   await mount(r);
   r.connectManagedRoutes(Promise.resolve(r.prefetchManagedRoute));
@@ -257,7 +275,7 @@ it('详情舞台压在上面时页面留着，地址回来也不重挂；壳下�
 });
 
 it('壳直接改写了容器再收起也不报错：页面画在自己的宿主里', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats } = surface();
   await mount(r);
   r.connectManagedRoutes(Promise.resolve(r.prefetchManagedRoute));
@@ -272,7 +290,7 @@ it('壳直接改写了容器再收起也不报错：页面画在自己的宿主�
 });
 
 it('路由树没装载就打开：容器先归路由树、不取数，装载之后才取首屏、才画', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats, skeleton } = surface();
   const fetch = tasksFetch(tasks(), { deferred: false });
   fetch.install();
@@ -290,7 +308,7 @@ it('路由树没装载就打开：容器先归路由树、不取数，装载之�
 });
 
 it('包取不回来时，等着的那一页跟着失败', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats, skeleton } = surface();
   r.connectManagedRoutes(Promise.reject(new Error('取不回 peach-react.js')));
   await expect(open(r, stats)).rejects.toThrow('取不回 peach-react.js');
@@ -321,10 +339,10 @@ it('配置页打开返回的那一刻，页签条已经在容器里，选中的�
     const open = { section: '网络与访问' };
     expect(await r.openManagedRoute('/settings/library', open, { container: stats, isCurrent: () => true })).toBe(true);
     const tabs = [...stats.querySelectorAll('.ui-configpage > .ui-board-local-nav[role="tablist"] > [role="tab"]')];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['媒体库与入库', '来源与订阅', '网络与访问', '应用与维护', '系统诊断']);
-    expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['false', 'false', 'true', 'false', 'false']);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['媒体库与入库', '网络与访问', '应用与维护']);
+    expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
     const active = stats.querySelector('.ui-board-group-active');
-    expect(active?.id).toBe(tabs[2].getAttribute('aria-controls'));
+    expect(active?.id).toBe(tabs[1].getAttribute('aria-controls'));
     expect(stats.querySelector('.ui-configpage')?.parentElement?.classList.contains('peach-react')).toBe(true);
   });
 });
@@ -333,44 +351,30 @@ it('这几页之间的跳转交给 React Router，别的路径交壳', async () 
   const r = await load('/');
   const actions = shellActions();
   const navigate = vi.fn();
-  r.managedGo('/tasks', actions, navigate);
-  r.managedGo('/sources?from=cleanup#top', actions, navigate);
+  r.managedGo('/stats', actions, navigate);
+  r.managedGo('/settings/library?from=menu#top', actions, navigate);
   r.managedGo('/', actions, navigate);
   r.managedGo('/trash', actions, navigate);
-  expect(navigate.mock.calls).toEqual([['/tasks'], ['/sources?from=cleanup#top']]);
+  expect(navigate.mock.calls).toEqual([['/stats'], ['/settings/library?from=menu#top']]);
   expect(vi.mocked(actions.navigate).mock.calls).toEqual([['/'], ['/trash']]);
 });
 
 it('页面里的跳转：只领一个页面打开序号、历史只多一条', async () => {
-  const r = await load('/sources');
+  const r = await load('/settings/library');
   await mount(r);
   const epoch = r.peachHistory.navigation.openEpoch;
   const before = window.history.length;
   const navigate = ((to: string) => { r.peachHistory.push(to) }) as unknown as NavigateFunction;
-  await act(async () => { r.managedGo('/tasks', shellActions(), navigate) });
-  expect([r.peachHistory.navigation.openEpoch - epoch, location.pathname, window.history.length - before]).toEqual([1, '/tasks', 1]);
+  await act(async () => { r.managedGo('/stats', shellActions(), navigate) });
+  expect([r.peachHistory.navigation.openEpoch - epoch, location.pathname, window.history.length - before]).toEqual([1, '/stats', 1]);
 });
 
 /** 一页的元素与它拿到的 props，不画。 */
 function element<P>(path: keyof Loaded['MANAGED_ROUTES'], r: Loaded, open: object, actions: ShellActions, go: (path: string) => void) {
-  return (r.MANAGED_ROUTES[path].page as (open: object, actions: ShellActions, go: (path: string) => void) => ReactElement<P>)(
+  return (r.MANAGED_ROUTES[path]!.page as (open: object, actions: ShellActions, go: (path: string) => void) => ReactElement<P>)(
     open, actions, go).props;
 }
 
-it('诊断页先选配置分栏再导航，作品与任务交给共享入口', async () => {
-  const r = await load();
-  const actions = shellActions();
-  const order: string[] = [];
-  const go = vi.fn((path: string) => { order.push(path) });
-  vi.mocked(actions.requestConfigurationSection).mockImplementation(section => { order.push(section) });
-  const page = element<ConfigurationProps & { diagnostics: ReactElement<DiagnosticsProps> }>('/settings/diagnostics', r, {}, actions, go);
-  const props = page.diagnostics.props;
-  props.configure('网络与访问');
-  props.openItem(12);
-  props.navigate('/tasks');
-  expect(order).toEqual(['网络与访问', '/settings/network', '/tasks']);
-  expect(actions.openItem).toHaveBeenCalledWith(12);
-});
 
 it('统计页：点标签交壳回目录；「添加媒体目录」先交页签再换到配置页', async () => {
   const r = await load();
@@ -386,90 +390,10 @@ it('统计页：点标签交壳回目录；「添加媒体目录」先交页签�
   expect([props.configurable, props.tagLabel('JK制服')]).toEqual([false, 'JK制服']);
 });
 
-it('口味页：总结里的下一步按路径走 go', async () => {
-  const r = await load();
-  const go = vi.fn();
-  const props = element<TasteProps>('/taste', r, { onboarding: true }, shellActions(), go);
-  props.navigate('/subscriptions');
-  props.navigate('/');
-  expect(go.mock.calls).toEqual([['/subscriptions'], ['/']]);
-  expect(props.onboarding).toBe(true);
-});
 
-it('数据管理页：复核、高清版与重复文件走 go，垃圾文件与回收站交壳', async () => {
-  const r = await load();
-  const actions = shellActions();
-  const go = vi.fn();
-  const props = element<DataCleanupProps>('/data-cleanup', r, {}, actions, go);
-  for (const section of ['review', 'quality', 'duplicates', 'ads', 'trash'] as const) props.open(section);
-  expect(go.mock.calls).toEqual([['/review'], ['/quality-goals'], ['/duplicates']]);
-  expect(vi.mocked(actions.openManage).mock.calls).toEqual([['ads'], ['trash']]);
-  props.toast('做完了', { warning: true });
-  props.toast('做完了');
-  expect(vi.mocked(actions.toast).mock.calls).toEqual([[{ text: '做完了' }, { sound: 'warning' }]]);
-  expect(vi.mocked(actions.receipt).mock.calls).toEqual([['做完了']]);
-});
 
-it('复核页与关注管理页把地址写回壳，不重开', async () => {
-  const r = await load();
-  const actions = shellActions();
-  const go = vi.fn();
-  const review = element<ReviewProps>('/review', r,
-    { category: 'name', readOnly: true, readOnlyMessage: '只读', writerUrl: '' }, actions, go);
-  expect([review.route, review.category, review.readOnly]).toEqual([actions.routeReview, 'name', true]);
-  const follow = element<FollowManageProps>('/subscriptions', r, {
-    tab: 'list', page: 2, sort: '', dir: '', pageSize: 20, layout: 'default', readOnly: false, readOnlyMessage: '', writerUrl: '',
-  }, actions, go);
-  expect([follow.route, follow.savePreference, follow.openFollow, follow.page])
-    .toEqual([actions.routeFollowManage, actions.saveFollowPreference, actions.openFollow, 2]);
-});
 
-it('回执、打开作品与资料页都交回壳：都走过去时回执', async () => {
-  const r = await load();
-  const actions = shellActions();
-  const undo = async () => {};
-  const go = vi.fn();
-  const goals = element<QualityGoalsProps>('/quality-goals', r, {}, actions, go);
-  goals.openItem(3);
-  expect(goals.srcBadge).toBe(actions.srcBadge);
-  expect(goals.javDisplayName({ name: 'ABC-123 片名.mp4' } as never)).toContain('ABC-123');
-  expect(goals.javTitleHtml({ name: '<b>.mp4' } as never)).not.toContain('<b>');
-  goals.toast('已提交离线下载');
-  const duplicates = element<DuplicatesProps>('/duplicates', r, {}, actions, vi.fn());
-  duplicates.toast('已删除', { undo });
-  duplicates.toast('已保留');
-  duplicates.failure('删除', 'boom');
-  const configuration = element<ConfigurationProps>('/settings/library', r, { section: '媒体库与入库' }, actions, vi.fn());
-  configuration.receipt('已保存配置');
-  expect([configuration.reopenTutorial, configuration.section]).toEqual([actions.reopenTutorial, '媒体库与入库']);
-  const review = element<ReviewProps>('/review', r,
-    { category: '', readOnly: false, readOnlyMessage: '', writerUrl: '' }, actions, vi.fn());
-  review.openEntity('performer', '某人');
-  review.toast('已判定');
-  expect(review.revealSource).toBe(actions.revealSource);
-  element<FollowManageProps>('/subscriptions', r, {
-    tab: 'list', page: 1, sort: '', dir: '', pageSize: 20, layout: 'default', readOnly: false, readOnlyMessage: '', writerUrl: '',
-  }, actions, vi.fn()).toast('已添加 1 个关注来源');
-  const taste = element<TasteProps>('/taste', r, { onboarding: false }, actions, vi.fn());
-  taste.onSignal('tag', '痴女');
-  taste.toast('已导入');
-  expect(vi.mocked(actions.openItem).mock.calls).toEqual([[3]]);
-  expect(vi.mocked(actions.openEntity).mock.calls).toEqual([['performer', '某人']]);
-  expect(vi.mocked(actions.openTasteSignal).mock.calls).toEqual([['tag', '痴女']]);
-  expect(vi.mocked(actions.failure).mock.calls).toEqual([['删除', 'boom']]);
-  expect(actions.toast).not.toHaveBeenCalled();
-  expect(vi.mocked(actions.receipt).mock.calls).toEqual([
-    ['已提交离线下载'], ['已删除', { undo }], ['已保留', {}], ['已保存配置'], ['已判定'], ['已添加 1 个关注来源'], ['已导入'],
-  ]);
-});
 
-it('采集页的提示走全站 Toast 原样', async () => {
-  const r = await load();
-  const actions = shellActions();
-  element<ScrapingProps>('/sources', r, {}, actions, vi.fn()).toast('已保存');
-  expect(vi.mocked(actions.toast).mock.calls).toEqual([['已保存']]);
-  expect(actions.receipt).not.toHaveBeenCalled();
-});
 
 /** 索引页与资料页共用的容器，里面是壳铺好的骨架。 */
 function indexSurface() {
@@ -570,7 +494,7 @@ it('就地更新在容器里没有画着的页面时是空操作：还在取首�
 /* 资料页画进 `#index` 时管理区那一页只是被壳藏起来：两个容器各记各的，收一个不动另一个；
    一次点名两个容器就一起收。 */
 it('`#stats` 与 `#index` 各画一页，互不相收；点名两个容器时一起收', async () => {
-  const r = await load('/tasks');
+  const r = await load('/stats');
   const { stats } = surface();
   const { index } = indexSurface();
   await mount(r);
@@ -583,7 +507,7 @@ it('`#stats` 与 `#index` 各画一页，互不相收；点名两个容器时一
   const page = painted(stats);
   await act(async () => { await r.openManagedRoute('/tags', tagsOpen(), { container: index, isCurrent: () => true }) });
   expect(painted(stats), '在 `#index` 里打开一页不收 `#stats` 那一页').toBe(page);
-  expect(r.managedEntries().map((entry) => entry.path)).toEqual(['/tasks', '/tags']);
+  expect(r.managedEntries().map((entry) => entry.path)).toEqual(['/stats', '/tags']);
   act(() => { r.releaseManagedRoute(index) });
   expect(index.querySelector('.peach-react')).toBeNull();
   expect(painted(stats), '收 `#index` 不动 `#stats`').toBe(page);

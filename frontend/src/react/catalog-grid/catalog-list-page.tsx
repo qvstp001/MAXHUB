@@ -16,7 +16,6 @@ import { ArtSlot } from '../components/art-slot';
 import { DataTableFrame } from '../components/data-table-frame';
 import { DataTableFooter, DataTableSort } from '../components/table-controls';
 import { RetryNote } from '../components/grid-reveal';
-import { LibraryCompletionPrompt, missingPreviewIds } from '../library-processing/library-completion';
 import { catalogParams } from './catalog-grid';
 import type { CatalogGridProps, MediaItem, MediaPage } from './types';
 import './catalog-list.css';
@@ -124,7 +123,6 @@ export function CatalogListPage(props: CatalogGridProps) {
       <DataTableSort label="作品列表" options={sortOptions} sorting={sorting}
         onChange={next => table.setSorting(next)} />
     </div>
-    <LibraryCompletionPrompt assetIds={props.filters?.state === 'trash' ? [] : missingPreviewIds(items, props.layout.javImage)} />
     {result.isError ? <RetryNote message={requestErrorMessage(result.error)} onRetry={() => void result.refetch()} /> : null}
     <DataTableFrame follow onRowClick={id => { if (!result.isPlaceholderData) props.actions.toggleSelection(Number(id), false) }}>
       <Table aria-label="作品列表" size="sm"

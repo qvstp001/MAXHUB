@@ -1,145 +1,36 @@
-<p align="center">
-  <img src="resources/peach-logo.png" alt="Peach" width="96">
-</p>
+# QMaxHub 媒体库播放器
 
-<h1 align="center">Peach</h1>
+基于 [Peach](https://github.com/peach-mitao/peach) 的单人自托管媒体库，以本地媒体和 STRM 播放为核心，适用于 NAS Docker。
 
-> 本仓库的 `main` 分支提供 Peach STRM 定制版，包含 302 直连、PotPlayer、Android mpv、详情横幅、在线字幕和独立女优资料采集。GHCR 镜像为 `ghcr.io/qvstp001/qmaxhub:latest`，通过容器验收后发布。开始使用请看 [STRM Docker 部署](docs/STRM_DOCKER.md)。原 QMaxHub 代码保留在 `qmaxhub-legacy-before-peach` 标签和 Git 历史中。
+## 功能
 
-<p align="center">给自己用的私人影片馆藏：本地硬盘、网盘和关注的创作者，放在一个地方看。</p>
+- 浏览媒体库、人物、标签和播放列表，支持搜索、自然番号排序及收藏、稍后看。
+- 海报和横幅两种视图，分别保存卡片尺寸；详情读取本地封面、横幅和 NFO。
+- 扫描媒体目录并导入本地资料；缺少资料时使用文件名，媒体保持只读。
+- 网页播放、Range、播放进度、本地字幕，以及 SubtitleCat、迅雷在线字幕。
+- STRM 支持代理和 302 直连，可导出 M3U 或调用 PotPlayer、Android mpv。
+- FFmpeg 软件转码及既有硬件转码探测、失败回退。
 
-<p align="center">
-  <a href="https://peach.video">官网</a> ·
-  <a href="https://github.com/peach-mitao/peach/releases">下载安装包</a> ·
-  <a href="https://demo.peach.video">在线演示</a> ·
-  <a href="https://github.com/peach-mitao/peach/releases/tag/intro-video">介绍视频</a> ·
-  <a href="https://github.com/peach-mitao/peach/issues">问题反馈</a> ·
-  <a href="https://github.com/orgs/peach-mitao/projects/7/views/1">需求看板</a> ·
-  <a href="https://github.com/orgs/peach-mitao/projects/7/views/3">路线图</a> ·
-  <a href="#文档">文档</a> ·
-  <a href="README.en.md">English</a>
-</p>
+服务不提供影片或人物刮削、订阅追更、在线作品发现、资源搜索、云下载、浏览历史口味采集和资料候选复核。已有影片资料、人物档案、收藏和观看记录继续保存在原数据库中。
 
-<p align="center">
-  <a href="https://github.com/peach-mitao/peach/releases"><img src="https://img.shields.io/github/v/release/peach-mitao/peach?include_prereleases&amp;filter=v*&amp;sort=semver&amp;display_name=tag" alt="release"></a>
-  <a href="https://github.com/peach-mitao/peach/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/peach-mitao/peach/test.yml?branch=master&amp;label=tests&amp;logo=githubactions&amp;logoColor=white" alt="CI 状态"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue?logo=gnu&amp;logoColor=white" alt="license"></a>
-  <a href="docs/TESTING_DESKTOP.md"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
-  <a href="docs/OPERATIONS.md#macos-独立测试包"><img src="https://img.shields.io/badge/macOS-DMG-555555?logo=apple&amp;logoColor=white" alt="macOS 独立应用构建与安装"></a>
-  <img src="https://img.shields.io/badge/18%2B-adult%20content-critical" alt="18+ 成人内容">
-</p>
+## Docker
 
-https://github.com/user-attachments/assets/a5610874-e611-41bb-be22-7d99f0d64b62
+镜像地址：`ghcr.io/qvstp001/qmaxhub:latest`。源码修改须经构建、容器验收和发布后才进入该标签。
 
-> **18+** 仅供成年人管理自己的成人内容馆藏。仓库不含媒体或站点数据；连接外部站点需有相应账号和访问权。
+使用 [STRM Docker 部署说明](docs/STRM_DOCKER.md) 配置专用 `/data` 与只读 `/media`，在网页设置中添加容器内媒体路径。已有部署保留原来的端口、用户、挂载和网络配置，更新前备份数据库与专用数据目录。
 
-## 能做什么
+镜像只安装媒体库运行依赖，不包含 OpenCV、NumPy、人脸模型、爬虫浏览器传输、云下载客户端和桌面托盘依赖。FFmpeg 与现有 VAAPI 软件栈保留。体积以发布工作流记录为准。
 
-- **本地、网盘一起看**：硬盘与已挂载的 115、PikPak、OneDrive 等网盘汇成一个馆藏。
-- **播放墙挑片**：拖动全屏封面墙，点开原位播放；同一番号的不同版本与分卷集中切换。
-- **播放器字幕**：加载本地字幕，按番号搜索 SubtitleCat 简繁中文字幕并选择加载，调整字体、字号、颜色与背景。在线搜索无需 API Key，来源可能包含机翻。
-- **STRM 外部播放**：支持 302 直连或 Peach 代理，可用 PotPlayer、Android mpv 及 M3U 播放列表打开；见[外部播放器](docs/EXTERNAL_PLAYERS.md)。
-- **接手已有收藏**：直接读取 NFO 和海报，缺少的标题、女优、厂牌与封面可从多个来源补齐，保留手动修改。
-- **跨站关注**：同一创作者在 FANBOX、Patreon、Kemono 等站点的更新汇到一起，同一作品合成一张卡。
-- **追新作、找想看的**：按女优订阅新作，按口味发现作品，用「想要」清单留住待找的片子。
-- **云下载**：按番号查找资源或粘贴磁力，提交到 115 或 PikPak，落地后自动整理入库。
-- **浏览器添加 JAV**：在 JavDB、MissAV、Jable 等站点识别或选中番号，一键交给 Peach 云下载入库。[用户脚本](https://github.com/peach-mitao/peach-userscript)独立维护，见[安装与配对](docs/JAV_BROWSER.md)。
-- **口味**：结合观看、反馈、馆藏、浏览历史、书签与关注关系分析偏好。一次读取本机浏览器的历史和书签，也可导入 HTML 书签或 Chromium Bookmarks JSON；来源可停止读取或删除。见[口味数据来源](docs/TASTE_SOURCES.md)。
+## 开发与验证
 
-观看记录、收藏和设置保存在本机。扫描不动原文件；手动整理先预览，可撤回上一批。
+Python 依赖通过 `pyproject.toml` 和 `uv.lock` 固定。开发环境使用 `uv sync --locked --all-extras`；镜像使用 `uv sync --locked --no-dev --no-editable`。历史模块和桌面工具回归所需依赖只属于开发环境。
 
-扫描、关注更新和新作资料采集会保存进度，应用重启后继续处理未完成的项目。恢复范围见[断点续跑](docs/OPERATIONS.md#长时任务断点续跑)。
+前端源码位于 `frontend/`，构建产物位于 `web/dist/`。验证通过统一入口 `scripts/test.ps1` 或 `scripts/test.sh`，见 [测试说明](docs/TESTING.md)。
 
-「发送版本统计与错误诊断（推荐）」默认勾选，可在安装、首次设置或设置页取消。两类技术事件由同一开关控制，已保存的关闭选择会保留。启用后向 Sentry 发送页面列出的技术字段，不自动上传完整日志、诊断 ZIP、媒体信息或观看记录。见[远程诊断说明](docs/DIAGNOSTICS.md#可选远程诊断)。
+## 来源与许可
 
-馆藏与口味明细上传在安装器和设置页另设独立选项，默认关闭。设置页先展示完整字段与本机预览，经明确同意后，每周上传作品、标签、评分、观看汇总及全部偏好维度的明细；不含账号、设备或安装标识。明细仍有跨次关联与再识别风险，接收服务可见连接 IP。见[馆藏与口味群体研究](docs/DIAGNOSTICS.md#馆藏与口味群体研究)。
+Peach 基线为 `de22796c04919aaa057d77930c33c81313765569`（0.46.1），保留上游版权及 [AGPL-3.0-or-later](LICENSE)。产品精简边界见 [ADR-0114](docs/adr/0114-library-player-runtime.md)。
 
-## 截图
+定制代码仅发布到用户仓库。原 QMaxHub 保留于 `qmaxhub-legacy-before-peach` 标签及完整 Git 历史；旧功能的历史设计文档不代表播放器当前提供这些功能。
 
-[在线演示](https://demo.peach.video) 可直接体验搜索、筛选和资料页，操作不会保存。点击截图查看原图。
-
-<table>
-  <tr>
-    <td width="50%"><a href="https://peach.video/assets/screenshots/home-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/home-20261014.webp" alt="馆藏：首页筛选与作品卡片" width="600"></a></td>
-    <td width="50%"><a href="https://peach.video/assets/screenshots/profile-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/profile-20261014.webp" alt="女优页：人像、资料与全部作品" width="600"></a></td>
-  </tr>
-  <tr>
-    <td align="center">馆藏：按人物、来源和标签找片</td>
-    <td align="center">女优页：资料、别名和全部作品</td>
-  </tr>
-  <tr>
-    <td><a href="https://peach.video/assets/screenshots/follow-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/follow-20261014.webp" alt="关注：创作者导航与图片更新" width="600"></a></td>
-    <td><a href="https://peach.video/assets/screenshots/stats-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/stats-20261014.webp" alt="统计：馆藏、存储与内容分布" width="600"></a></td>
-  </tr>
-  <tr>
-    <td align="center">关注：创作者的跨站更新</td>
-    <td align="center">统计：片子存在哪、看了多少</td>
-  </tr>
-  <tr>
-    <td colspan="2"><a href="https://peach.video/assets/screenshots/wall-20261014.png" target="_blank" rel="noopener"><img src="https://peach.video/assets/screenshots/wall-20261014-readme.webp" alt="播放墙：全屏作品封面与浏览控件" width="1200"></a></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">播放墙：拖动挑片，原位播放</td>
-  </tr>
-</table>
-
-## 下载与使用
-
-### Windows
-
-1. 从 [Releases](https://github.com/peach-mitao/peach/releases) 下载完整安装包 `Peach-<版本>-windows-x64-setup.exe`，双击安装，无需管理员权限；也可下载完整免安装包，解压后运行 `Peach.exe`。
-2. 浏览器打开首次设置页后，选择媒体目录和访问范围。
-3. 开始扫描，随后在浏览器里浏览和播放。
-
-完整安装包携带媒体工具，可离线安装；轻量安装包体积更小，安装时按需下载工具。
-
-测试版尚未签名。若 Windows 提示「已保护你的电脑」，确认来自本项目的 Release，再点「更多信息 → 仍要运行」。安装、更新和故障排查见 [Windows 使用说明](docs/TESTING_DESKTOP.md)。
-
-### macOS 本机构建
-
-macOS 可在本机构建独立 `.app` 与 DMG，运行不需要 Python、源码或另一台电脑。构建与安装见 [macOS 独立测试包](docs/OPERATIONS.md#macos-独立测试包)。
-
-发版流程分别生成 Apple Silicon（`macos-arm64.dmg`）与 Intel（`macos-x86_64.dmg`）测试包；可下载版本以 [Releases](https://github.com/peach-mitao/peach/releases) 的实际资产为准。在「关于本机」确认芯片，打开对应镜像并将 Peach 拖入「应用程序」。测试包未完成 Apple 公证，媒体工具需另行准备。
-
-### 从源码运行（Windows、macOS）
-
-需要 Git、uv 和 Python 3.14 或更高，步骤见[源码运行](docs/OPERATIONS.md#从源码运行windowsmacos)。
-
-### Docker（VPS / NAS）
-
-部署步骤与支持范围见 [Docker 部署](docs/DOCKER.md)。
-
-## 常见问题
-
-- **会改我的文件吗？** 扫描、补资料不碰原文件。手动整理会改名或移动；清空回收站会删除文件，资源同步中的清理会删除空目录，均需确认。
-- **支持哪些网盘？** 通过 CloudDrive2 等工具挂载为本地目录的网盘，详见[网盘挂载](docs/CLOUDDRIVE.md)；云下载支持 115 和 PikPak，登录令牌保存在本机。
-- **手机上怎么看？** 首次设置时允许同一局域网的设备访问，手机连同一网络，打开设置页给出的地址，并设置访问密码。
-- **数据存在哪？** 本机的 `peach-data` 文件夹；Windows 版默认位于 `%LOCALAPPDATA%\Peach\peach-data`。
-
-## 问题反馈
-
-先查看[用户反馈](https://github.com/peach-mitao/peach/issues)，或[提交问题](https://github.com/peach-mitao/peach/issues/new/choose)，附上版本、操作步骤、预期与实际结果。截图请遮掉凭据、局域网地址和完整路径，不要上传数据库或媒体；安全问题按[安全政策](SECURITY.md)私下报告。
-
-## 文档
-
-[运行与配置](docs/OPERATIONS.md) · [来源采集](docs/SOURCING.md) · [外部播放器](docs/EXTERNAL_PLAYERS.md) · [变更日志](CHANGELOG.md)
-
-参与开发：[开发约定](AGENTS.md) · [测试与依赖](docs/TESTING.md)
-
-## 相关项目
-
-感谢 [amane](https://github.com/sqzw-x/amane)、[Gfriends](https://github.com/gfriends/gfriends)、[CloudDrive2](https://www.clouddrive2.com/) 等项目，完整致谢与复用说明见[复用清单](docs/REUSE.md)。
-
-## Star 历史
-
-<a href="https://www.star-history.com/?repos=peach-mitao%2Fpeach&amp;type=date&amp;logscale=&amp;releases=&amp;legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=peach-mitao/peach&amp;type=date&amp;theme=dark&amp;logscale&amp;legend=top-left">
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=peach-mitao/peach&amp;type=date&amp;logscale&amp;legend=top-left">
-    <img alt="Peach Star 历史" src="https://api.star-history.com/svg?repos=peach-mitao/peach&amp;type=date&amp;logscale&amp;legend=top-left">
-  </picture>
-</a>
-
-## 许可证
-
-[AGPL-3.0-or-later](LICENSE) · Copyright (C) 2026 longmeidao。第三方组件保留各自的许可证。
+[English](README.en.md)

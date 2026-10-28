@@ -20,20 +20,17 @@ import { RetryNote } from '../components/grid-reveal';
 import { spriteGlyph } from '../components/sprite-glyph';
 import type { EntityBodyActions, EntityPhotos, EntityRoster } from '../entity-body/entity-body';
 import { EntityBodyPage } from '../entity-body/entity-body-page';
-import { EntityOnline } from '../entity-body/entity-online';
 import type {
   EntityFilterActions, EntityFilterHelpers, EntityFilterTag, EntityPhotoHead, EntityVideoHead, EntityView, EntityViewKeys,
 } from '../entity-filter/entity-filter';
 import { EntityFilterPage } from '../entity-filter/entity-filter-page';
 import type { EntityHeroActions, EntityHeroHelpers } from '../entity-hero/entity-hero';
 import { EntityHeroPage } from '../entity-hero/entity-hero-page';
-import { feedNewKey, feedNewOptions, postFeedAction } from '../feed-new/feed-new';
 import { queryClient } from '../query';
 import {
   EMPTY_MEDIA, codeSetsOf, entityKey, entityOptions, entityPhotosKey, fetchItems, itemsOptions,
   photosOptions, tagList, tagPressed, type EntityPageData, type EntityPageProps, type PhotoPage,
 } from './entity-page';
-import { useEntityOnline } from './use-entity-online';
 
 export function EntityPage(props: EntityPageProps) {
   const { kind, name } = props;
@@ -83,7 +80,6 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
   /* 事务所名下的这批人不摆在资料卡底那排小圆头像里：那是「同台艺人」，一条附注；名册是这一页的
      正文。片商页的名册是旗下 label，同台艺人那排照旧留在卡底。 */
   const roster = kind === 'agency' ? (entity.related_performers || []) : kind === 'studio' ? (entity.labels || []) : [];
-  const entityId = Number(entity.id) || 0;
 
   /* ── 照片：整组那一份数出照片档有几张、出不出；墙读的是当前这一组（整组或一个图集）。 ── */
   const base = useInfiniteQuery(photosOptions(kind, name, 0, ''));
@@ -93,10 +89,10 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
   const photosAvailable = (basePhotos?.total || 0) > 0 || codeSetsOf(basePhotos).length > 0;
   /* 关注里绑在这位名下的来源（ADR-0096）：有就多一个在线视图。本地一部视频都没有时作品视图是空的，
      视频键不出，进页就落在在线。 */
-  const followKey = kind === 'creator' ? entity.follow?.key || '' : '';
+  const followKey = '';
   const onlineOnly = !!followKey && !entity.asset_count;
-  const mediaNow = media.media === 'photos' && photosAvailable ? media
-    : (media.media === 'online' || onlineOnly) && followKey ? { media: 'online' as const, set: 0 } : EMPTY_MEDIA;
+  const mediaNow = media.media === 'photos' && photosAvailable ? { media: 'photos' as const, set: media.set }
+    : { media: 'videos' as const, set: 0 };
 
   /* 名册与媒体不共用地址栏：地址栏只认 `media`，名册是事务所页与片商页的默认视图，进页就在那里。
      换了筛选就回到作品：标签是作品筛选，留在名册里既不生效，标签条也会自相矛盾。 */
@@ -107,14 +103,14 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
     setSeenFilters(filterKey);
     setRosterView('videos');
   }
-  const view: EntityView = company && rosterView === 'people' && roster.length ? 'people' : mediaNow.media;
+  const view: Exclude<EntityView, 'online'> = company && rosterView === 'people' && roster.length ? 'people' : mediaNow.media;
 
   /* ── 在线：筛选与取数同关注页，只按这位的作者键筛 ── */
-  const online = useEntityOnline(followKey, view === 'online', {
-    photoLayout: props.photoLayout, photoLayouts: props.photoLayouts, imagesOnly: props.followImagesOnly,
-    setImagesOnly: props.follow.actions.setImagesOnly,
-  });
-  const photoWall = view === 'photos' || (view === 'online' && online.media === 'images');
+  const online = { key: 'local', actions: {
+    onlineMedia: () => {}, onlineShuffle: () => {}, onlineImagesOnly: () => {}, onlineStatus: () => {},
+    onlineProvider: () => {}, onlineTag: () => {}, onlineSort: () => {},
+  } };
+  const photoWall = view === 'photos';
 
   /* 换过几次头像。资料卡与作品网格都把图拼进了自己的状态（网格只在代次变时才按新的第一页
      重建），重取到新数据还不够，得换键重建，新图地址里的版本才落得到页面上。 */
@@ -161,13 +157,7 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
   const fetchNextPhotos = wall.fetchNextPage;
 
   /* ── 新作 ── */
-  const feed = useQuery({ ...feedNewOptions(entityId, helpers.feedRowHtml), enabled: !!entityId });
-  const feedRevision = useRef(props.feedRevision);
-  useEffect(() => {
-    if (feedRevision.current === props.feedRevision) return;
-    feedRevision.current = props.feedRevision;
-    void queryClient.invalidateQueries({ queryKey: feedNewKey(entityId) });
-  }, [entityId, props.feedRevision]);
+  const feed = { data: null };
 
   /* 换了视图、换了一批内容之后吸顶要重算一次。 */
   const hasItems = !!items.data;
@@ -193,18 +183,6 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
         changed?: boolean; canonical_name?: string; previous_name?: string }>,
     onSuccess: () => refreshEntity(),
   });
-  const follow = useMutation({
-    mutationFn: (on: boolean) => api('/api/feeds/source',
-      { method: 'POST', body: JSON.stringify({ action: 'follow', entity_id: entityId, enabled: on }) }),
-    onSuccess: (_data, on) => queryClient.setQueryData<EntityPageData>(entityKey(kind, name),
-      (current) => (current ? { ...current, feed: { ...current.feed, following: on } } : current)),
-  });
-
-  const bindFollow = useMutation({
-    mutationFn: (key: string) => api('/api/follow/creator',
-      { method: 'POST', body: JSON.stringify({ entity_id: entityId, key }) }),
-  });
-
   const heroActions = useMemo<EntityHeroActions>(() => ({
     openEntity: actions.openEntity,
     /* 换统称要重写整条实体的扁平投影，先把代价说清再问。确认键、标题和成功回执共用「更改统称」这一个
@@ -228,27 +206,9 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
       });
     },
     addAlias: () => { void helpers.aliasForm(entity.user_aliases || [], (payload) => alias.mutateAsync(payload)) },
-    follow: async (on) => {
-      try {
-        await follow.mutateAsync(on);
-      } catch (error) {
-        helpers.failure(on ? '订阅新作' : '取消订阅新作', error);
-        throw error;
-      }
-    },
-    /* 「订阅新作」打开时服务端当场在后台拉一轮：等那一轮跑完再把新作那一行重取一次。等的上限是
-       那一轮自己的时长量级，页面换走了就不再等。 */
-    refreshFeedAfterCheck: () => {
-      void (async () => {
-        for (let tries = 0; tries < 40 && alive.current; tries += 1) {
-          await new Promise((resolve) => { setTimeout(resolve, 3000) });
-          const job = await (api('/api/feeds/check') as Promise<{ status?: string }>).catch(() => null);
-          if (!job || job.status !== 'running') break;
-        }
-        if (alive.current) await queryClient.invalidateQueries({ queryKey: feedNewKey(entityId) });
-      })();
-    },
-    feedAction: postFeedAction,
+    follow: async () => {},
+    refreshFeedAfterCheck: () => {},
+    feedAction: async () => {},
     /* 圆框角上那个加号：头像索引在服务端已经换过。资料与作品列表一起重取（作品卡署名里也是
        这张脸），回来后资料卡与作品网格都按新数据重建；壳缓存着的顶部三条也一并作废。 */
     avatarPicked: () => {
@@ -257,23 +217,9 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
         if (alive.current) setAvatarEpoch((epoch) => epoch + 1);
       });
     },
-    /* 资料卡那句「N 项更新」：这位名下的就在这一页的在线视图里，不离开；别的作者键才去关注页。 */
-    openFollowAuthor: (key) => {
-      if (key && key === followKey) actions.route(filters, { media: 'online', set: 0 });
-      else actions.openFollowAuthor(key);
-    },
-    /* 认过之后那组来源的更新都记到这位名下：资料重取，读数与提示跟着换。 */
-    confirmFollowAuthor: async (key, author) => {
-      try {
-        await bindFollow.mutateAsync(key);
-      } catch (error) {
-        helpers.failure('绑定关注作者', error);
-        throw error;
-      }
-      helpers.receipt(`已把关注里的 ${author} 记到 ${entity.canonical_name} 名下`);
-      await refreshEntity();
-    },
-  }), [actions, alias, bindFollow, entity, entityId, filters, follow, followKey, helpers, kind, name, refreshEntity, rename]);
+    openFollowAuthor: () => {},
+    confirmFollowAuthor: async () => {},
+  }), [actions, alias, entity, helpers, kind, refreshEntity, rename]);
   const heroHelpers = useMemo<EntityHeroHelpers>(() => ({
     portraitImg: () => helpers.portraitImg(kind, entity),
     wireScroller: helpers.wireDrag,
@@ -355,10 +301,6 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
   let readout = '';
   let busy = false;
   if (view === 'people') readout = `${kind === 'studio' ? '厂牌' : '艺人'} · ${roster.length.toLocaleString()}`;
-  else if (view === 'online') {
-    busy = online.busy;
-    readout = `在线 · ${(online.total ?? entity.follow?.n ?? 0).toLocaleString()} 项更新`;
-  }
   else if (view === 'videos') {
     busy = !items.data;
     /* 选了哪几枚标签由上面那条交集条一枚一枚列着，读数只报个数：标签名再列一遍，几枚长标签
@@ -386,20 +328,15 @@ function EntityLoaded(props: EntityPageProps & { entity: EntityPageData }) {
   return (
     <>
       <EntityHeroPage key={avatarEpoch} kind={kind} name={name} entity={entity} feedNew={feed.data ?? null}
-        feedHost={entityId ? hosts.feed : null} jav={javPage} actions={heroActions} helpers={heroHelpers} />
+        feedHost={null} jav={javPage} actions={heroActions} helpers={heroHelpers} />
       {createPortal(
         <EntityFilterPage kind={kind} name={name} view={view} views={views} state={filters.state || ''}
           states={props.states} tags={tags} combo={combo} readout={readout} busy={busy}
-          video={worksEmpty ? null : video} photo={photo} online={view === 'online' ? online.head : null} actions={filterActions}
+          video={worksEmpty ? null : video} photo={photo} online={null} actions={filterActions}
           helpers={filterHelpers} />,
         hosts.filter)}
       {createPortal(
-        view === 'online'
-          ? <EntityOnline key={online.key} view={online.view} media={online.media} result={online.result}
-            data={online.data} visible={online.visible} context={online.context} photoSize={props.photoSize}
-            photoLayout={props.photoLayout} imagesOnly={props.followImagesOnly} helpers={props.follow.helpers}
-            actions={props.follow.actions} canLoadMore={props.canLoadMore} />
-          : view === 'videos' && items.isError
+        view === 'videos' && items.isError
           ? <RetryNote message={errorMessage(items.error)} onRetry={() => { void items.refetch() }} />
           : worksEmpty ? <WorksEmpty filtered={filtered} onShowAll={showAll} />
           : (

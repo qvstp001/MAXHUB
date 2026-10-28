@@ -23,8 +23,8 @@ import { JAV_LAYOUTS, cardRatio, gridLayout, javLayout, posterWidth, bannerWidth
 import { entityFaceImg, facePos, logoUrl } from './../card-art/markup';
 import { sidebarHasCatalogContent } from './../sidebar';
 import { rememberRepresentatives } from './../card-art/representatives';
-import { clearHomeFeed, isFeedNewPath, renderHomeFeed } from './feed.js';
-import { loadingState, renderCatalogLoading } from './loading.js';
+import { clearHomeFeed } from './feed.js';
+import { renderCatalogLoading } from './loading.js';
 import { releaseHoverPreviews } from './../card-art/hover';
 import { revealRoutedPage } from './follow.js';
 import { pageSkeletonHtml } from './../management-placeholder';
@@ -387,16 +387,11 @@ export async function loadCatalog(){
   if(catalogState.controller.page==='/junk-files')clearCatalogGrid();
   renderCatalogLoading();
   showHomeSurfaces();
-  let feedReady=Promise.resolve();
-  if(isFeedNewPath(location.pathname)&&state.browse!=='folders'){
-    feedReady=Promise.resolve(loadingState.entityShapesReady).then(()=>{
-      if(navigationState.surfaceCurrent(surface))renderHomeFeed();
-    });
-  }else clearHomeFeed();
+  clearHomeFeed();
   renderCombo();
   $('#count').classList.remove('manage-static','junkcount');
   const gridReady=paintCatalogGrid(surface);
-  return Promise.all([feedReady,gridReady]).then(([,result])=>result);
+  return gridReady;
 }
 
 export function settleCatalog(revision) { catalogState.controller.settle(revision) }

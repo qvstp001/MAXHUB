@@ -3,10 +3,8 @@
 这是摄取入口，不是复核写入：它新增行、刷新 `size`／`mtime`／`last_seen`，不改任何
 真相字段——本次没扫到的文件只会在 `last_seen` 上落后，由资源同步对账决定去留。
 
-文件消失、带着个人记录的行由资源同步标 `disposal='vanished'`（ADR-0087）。登记时把它们接回：
-同一路径的文件回来了，upsert 清掉那一行的 `disposal`；新登记的行由 `record_rehome.reattach`
-按番号或「创作者 + 文件名主干 + 时长」找它的旧行，把记录搬过来、删掉旧行，记一个可撤回的批次。
-接着由 `wants.reconcile` 按番号对一遍「想要」清单，命中的标「已入库」，同样记可撤回的批次。
+文件消失时保留原资产行与个人记录。同一路径的文件回来后，upsert 清掉那一行的
+`disposal`；新路径作为独立资产登记，扫描不合并或删除旧资产，也不修改历史订阅资料。
 
 两条不变量都在这里守：
 
@@ -41,7 +39,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PureWindowsPath
 from filelock import FileLock
 
-from . import folder_rules, record_rehome, subtitles, wants
+from . import folder_rules, subtitles
 from .platform import is_windows_path, resolve_location, resolve_root
 from .processing_control import checkpoint
 from .fsutil import atomic_write_text
@@ -302,8 +300,7 @@ def ingest_path(
             "SELECT id,first_seen FROM asset WHERE location=? AND path=?",
             (location, str(ledger_path))).fetchone()
         new = first_seen == now
-        reattached = len(record_rehome.reattach(connection, [asset_id] if new else [], now=now))
-        acquired = len(wants.reconcile(connection, [asset_id] if new else []))
+        reattached = acquired = 0
         folder_rules.apply_new(connection, [asset_id] if new else [])
         connection.commit()
     finally:
@@ -517,8 +514,7 @@ def _scan_location(
         # 只有 INSERT 那一支写 `first_seen`，等于本次时刻的就是这一轮新建的行。
         new_ids = tuple(row[0] for row in connection.execute(
             "SELECT id FROM asset WHERE location=? AND first_seen=? ORDER BY id", (location, now)))
-        reattached = len(record_rehome.reattach(connection, new_ids, now=now))
-        acquired = len(wants.reconcile(connection, new_ids))
+        reattached = acquired = 0
         folder_rules.apply_new(connection, new_ids)
         connection.commit()
         gone =connection.execute(
