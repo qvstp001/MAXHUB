@@ -162,7 +162,13 @@ SCOPES: dict[str, tuple[str, ...]] = {
 }
 
 SCOPE_TEST_IDS: dict[str, tuple[str, ...]] = {
-    "player": ("test_web_resource_sync.LibraryScanTests",),
+    "player": (
+        "test_web_resource_sync.LibraryScanTests.test_confirmation_is_required",
+        "test_web_resource_sync.LibraryScanTests.test_missing_records_are_hidden_and_returned_files_are_restored",
+        "test_web_resource_sync.LibraryScanTests.test_offline_source_during_scan_preserves_all_records",
+        "test_web_resource_sync.LibraryScanTests.test_stat_permission_error_is_not_missing_evidence",
+        "test_web_resource_sync.LibraryScanTests.test_unreadable_directory_preserves_records",
+    ),
     "follow": (
         "test_rm_web.WebDataTests.test_contract_handler_registries_are_complete_and_unknown_routes_fail",
         "test_rm_web.WebDataTests.test_read_only_post_routes_are_declared_and_all_exist",

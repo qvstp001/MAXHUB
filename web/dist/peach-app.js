@@ -55104,7 +55104,6 @@ function LSe(e) {
 					if (!T.length) return /* @__PURE__ */ (0, C.jsx)(zSe, {
 						kind: u,
 						filtered: !!d || m !== "all",
-						online: g || _,
 						configurable: e.configurable
 					});
 					if (_) return /* @__PURE__ */ (0, C.jsx)(Nxe, {
@@ -55167,7 +55166,7 @@ var RSe = {
 	studios: "厂牌",
 	agencies: "事务所"
 };
-function zSe({ kind: e, filtered: t, online: n, configurable: r }) {
+function zSe({ kind: e, filtered: t, configurable: n }) {
 	if (t) return /* @__PURE__ */ (0, C.jsx)(WM, {
 		icon: KM("search"),
 		title: "没有符合条件的内容",
@@ -55178,20 +55177,16 @@ function zSe({ kind: e, filtered: t, online: n, configurable: r }) {
 		}),
 		children: "清除筛选或搜索条件后查看全部内容。"
 	});
-	let i = n && e === "performers" ? "创作者" : RSe[e], a = /* @__PURE__ */ (0, C.jsx)(lA, {
-		variant: !r || n ? "primary" : "secondary",
-		href: "/subscriptions?tab=add",
-		children: "添加关注"
-	});
+	let r = RSe[e];
 	return /* @__PURE__ */ (0, C.jsx)(WM, {
 		icon: KM(e === "tags" ? "tags" : "user-round"),
-		title: `还没有${i}`,
-		actions: n ? a : /* @__PURE__ */ (0, C.jsxs)(C.Fragment, { children: [r ? /* @__PURE__ */ (0, C.jsx)(W, {
+		title: `还没有${r}`,
+		actions: n ? /* @__PURE__ */ (0, C.jsx)(W, {
 			variant: "primary",
 			"data-empty-settings": "",
 			children: "添加内容"
-		}) : null, a] }),
-		children: n ? `添加关注来源并获取内容后，这里会显示来源上的${i}。` : "添加内容并补充资料后，这里会显示对应信息。"
+		}) : void 0,
+		children: "添加内容并读取本地资料后，这里会显示对应信息。"
 	});
 }
 var az = {
@@ -84761,7 +84756,7 @@ function A$e({ title: e, rows: t, empty: n, unit: r = "个视频" }) {
 }
 //#endregion
 //#region src/react/stats/stats-page.tsx
-var j$e = 10, H8 = F8[5], M$e = F8[4], N$e = `${xR()} flex flex-col gap-4`, U8 = "添加媒体目录或关注来源后，这里会显示馆藏统计。", P$e = "补全资料或添加标签后，这里会显示馆藏中的内容标签。", F$e = "开始播放后，这里会显示最近的真实观看证据。", I$e = "刮削或手动打标之后，这里会显示每个来源覆盖了多少视频。", L$e = "添加媒体目录后，这里会显示存储空间。", R$e = "把媒体目录归进媒体库后，这里会按库显示视频数。", z$e = "探测时长后，这里会显示时长分布。", B$e = "探测画质后，这里会显示画质分布。", V$e = "开始播放后，这里会显示播放落在一周的哪些时段。", H$e = "开始播放后，这里会显示每个作品播了几次。", W8 = (e, t) => Math.min(Math.max(e, 0), t);
+var j$e = 10, H8 = F8[5], M$e = F8[4], N$e = `${xR()} flex flex-col gap-4`, U8 = "导入本地媒体后，这里会显示馆藏统计。", P$e = "补全资料或添加标签后，这里会显示馆藏中的内容标签。", F$e = "开始播放后，这里会显示最近的真实观看证据。", I$e = "读取本地资料或手动打标之后，这里会显示每个来源覆盖了多少视频。", L$e = "添加媒体目录后，这里会显示存储空间。", R$e = "把媒体目录归进媒体库后，这里会按库显示视频数。", z$e = "探测时长后，这里会显示时长分布。", B$e = "探测画质后，这里会显示画质分布。", V$e = "开始播放后，这里会显示播放落在一周的哪些时段。", H$e = "开始播放后，这里会显示每个作品播了几次。", W8 = (e, t) => Math.min(Math.max(e, 0), t);
 function G8({ term: e, value: t }) {
 	return /* @__PURE__ */ (0, C.jsxs)("div", {
 		className: "flex min-h-16 min-w-0 flex-col gap-1.5 rounded-2lg bg-background-primary-default p-3",
@@ -84880,16 +84875,11 @@ function U$e({ data: e, configurable: t, openMediaSettings: n }) {
 		shell: "plain",
 		icon: FM,
 		title: "还没有视频",
-		actions: /* @__PURE__ */ (0, C.jsxs)(C.Fragment, { children: [t ? /* @__PURE__ */ (0, C.jsx)(W, {
+		actions: /* @__PURE__ */ (0, C.jsx)(C.Fragment, { children: t ? /* @__PURE__ */ (0, C.jsx)(W, {
 			size: "small",
 			onClick: n,
 			children: "添加媒体目录"
-		}) : null, /* @__PURE__ */ (0, C.jsx)(lA, {
-			variant: "secondary",
-			href: "/subscriptions?tab=add",
-			size: "small",
-			children: "添加关注"
-		})] }),
+		}) : null }),
 		children: U8
 	});
 }
@@ -85034,9 +85024,9 @@ function J$e({ tags: e, tagLabel: t, onTag: n }) {
 		title: "还没有内容标签",
 		actions: /* @__PURE__ */ (0, C.jsx)(lA, {
 			variant: "secondary",
-			href: "/data-cleanup",
+			href: "/settings/library",
 			size: "small",
-			children: "补全资料"
+			children: "导入本地媒体"
 		}),
 		children: P$e
 	});
@@ -85126,9 +85116,9 @@ function X$e({ sources: e, videos: t }) {
 		title: "还没有标签来源",
 		actions: /* @__PURE__ */ (0, C.jsx)(lA, {
 			variant: "secondary",
-			href: "/data-cleanup",
+			href: "/settings/library",
 			size: "small",
-			children: "补全资料"
+			children: "导入本地媒体"
 		}),
 		children: I$e
 	});
@@ -89615,14 +89605,11 @@ async function r6e(e, t) {
 		return r.set("q", e), r.set("limit", "1"), (await t("/api/items?" + r)).total > 0 ? e : "";
 	}))).filter(Boolean);
 }
-function i6e({ kind: e = "catalog", filtered: t = !1, jav: n = !1, configurable: r = !1, online: i = !1 } = {}) {
-	let a = r ? "<button class=\"geist-button primary\" data-empty-settings>添加内容</button>" : "";
+function i6e({ kind: e = "catalog", filtered: t = !1, jav: n = !1, configurable: r = !1 } = {}) {
+	let i = r ? "<button class=\"geist-button primary\" data-empty-settings>添加内容</button>" : "";
 	if (t || n) return Wi("search", n ? "还没有符合条件的 JAV 作品" : "没有符合条件的内容", n ? "已扫描但尚未补充发行资料的视频可在全部内容中查看。" : "清除筛选或搜索条件后查看全部内容。", { actions: "<a class=\"geist-button primary\" href=\"/?loc=&thumb=0\">查看全部内容</a>" });
 	if (e !== "catalog") {
-		let t = (i ? {
-			tags: "标签",
-			performers: "创作者"
-		}[e] : "") || {
+		let t = {
 			tags: "标签",
 			performers: "艺人",
 			creators: "卖家",
@@ -89630,9 +89617,9 @@ function i6e({ kind: e = "catalog", filtered: t = !1, jav: n = !1, configurable:
 			agencies: "事务所",
 			series: "系列"
 		}[e] || "资料";
-		return Wi(e === "tags" ? "tags" : "user-round", "还没有" + t, i ? "添加关注来源并获取内容后，这里会显示来源上的" + t + "。" : "添加内容并补充资料后，这里会显示对应信息。", { actions: i ? "" : a + "" });
+		return Wi(e === "tags" ? "tags" : "user-round", "还没有" + t, "添加内容并读取本地资料后，这里会显示对应信息。", { actions: i });
 	}
-	return Wi("play", "还没有视频", "添加媒体目录并导入本地媒体，开始建立你的馆藏。", { actions: a });
+	return Wi("play", "还没有视频", "添加媒体目录并导入本地媒体，开始建立你的馆藏。", { actions: i });
 }
 //#endregion
 //#region src/application/catalog.js

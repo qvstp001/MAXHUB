@@ -11,6 +11,28 @@ let browser: Browser;
 before(async () => { browser = await launch() });
 after(async () => { await browser?.close() });
 
+it('桌面空名册与统计页显示本地入库提示', { timeout: 60_000 }, async () => {
+  const opened = await visit(browser, '/performers', desktop, async page => {
+    await page.route(url => url.pathname === '/api/index', route =>
+      route.fulfill({ json: { items: [], has_more: false } }));
+    await page.route(url => url.pathname === '/api/stats', async route => {
+      const response = await route.fetch();
+      await route.fulfill({ json: { ...await response.json(), by_loc: [], by_library: [], top_tags: [], tag_sources: [] } });
+    });
+  });
+  try {
+    const { page } = opened;
+    for (const path of ['/performers', '/stats']) {
+      await page.goto(new URL(path, page.url()).toString(), { waitUntil: 'load' });
+      await page.getByRole('heading', { name: path === '/stats' ? '还没有视频' : '还没有艺人', exact: true }).waitFor();
+      await settle(page);
+      assert.equal(await page.locator('a[href^="/subscriptions"], a[href="/data-cleanup"]').count(), 0);
+      assert.ok(await page.getByText(path === '/stats' ? '导入本地媒体后，这里会显示馆藏统计。' : '添加内容并读取本地资料后，这里会显示对应信息。', { exact: true }).isVisible());
+    }
+    assert.deepEqual(opened.problems, []);
+  } finally { await opened.close() }
+});
+
 it('桌面媒体库保留目录与播放器，启动和详情仅请求本地馆藏', { timeout: 60_000 }, async () => {
   const opened = await openItemPage(browser, '/', desktop, { ready: '#grid [data-media-card]' });
   try {

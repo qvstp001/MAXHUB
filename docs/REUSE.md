@@ -4,6 +4,8 @@
 
 媒体索引与本地资料导入复用既有扫描、NFO 解析、实体投影、Pillow 图片与 SQLite 事务，不新增元数据服务。STRM、Range、字幕、播放记录和 FFmpeg 转码沿用现有实现。产品边界见 [ADR-0114](adr/0114-library-player-runtime.md)。
 
+空馆藏、名册与统计页复用现有空态组件和媒体库设置入口；导入读取本地媒体与配套资料。可配置的设备提供添加目录入口，浏览设备显示本地入库提示。
+
 依赖精简以已有镜像层与 Python 导入链为依据：OpenCV、NumPy、人脸模型、云下载、浏览器历史与爬虫专用依赖不在默认环境中。测试仍可安装开发依赖覆盖历史代码；运行镜像仅使用锁定的默认依赖。无新增外部实现、库或版本。
 
 播放器 CI 沿用 `FedericoCarboni/setup-ffmpeg@v3` 的官方 `release` 工具渠道，输入契约见其 [action.yml](https://github.com/FedericoCarboni/setup-ffmpeg/blob/v3/action.yml)。工具服务只接受当前可下载制品，固定到已撤下的制品版本会在运行测试前失败；Docker 运行镜像仍使用 Debian 的 FFmpeg，Windows 发行源码清单不受此测试工具选择影响。
