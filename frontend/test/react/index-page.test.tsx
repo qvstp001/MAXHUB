@@ -85,6 +85,14 @@ describe('地址栏上的类型', () => {
 });
 
 describe('名册', () => {
+  it.each(['tags', 'performers', 'creators', 'studios', 'agencies'] as const)('%s 空名册提供本地内容入口', async kind => {
+    seed(indexKey(kind, ''), []);
+    const host = await open(props({ kind }));
+    expect(buttonNamed('添加内容', host)).not.toBeNull();
+    expect(host.querySelector('a[href^="/subscriptions"]')).toBeNull();
+    expect(host.textContent).toContain('读取本地资料');
+  });
+
   it('本地名册打开人物资料，来源历史不显示订阅标记', async () => {
     seed(indexKey('performers', ''), [person('甲', { following: true })]);
     const given = props();

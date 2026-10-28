@@ -48,10 +48,10 @@ const VIEWING_COLOR = CHART_COLORS[4];
 
 const CARD = `${cardClass()} flex flex-col gap-4`;
 
-const NO_VIDEO_HINT = '添加媒体目录或关注来源后，这里会显示馆藏统计。';
+const NO_VIDEO_HINT = '导入本地媒体后，这里会显示馆藏统计。';
 const NO_TAG_HINT = '补全资料或添加标签后，这里会显示馆藏中的内容标签。';
 const NO_WATCH_HINT = '开始播放后，这里会显示最近的真实观看证据。';
-const NO_TAG_SOURCE_HINT = '刮削或手动打标之后，这里会显示每个来源覆盖了多少视频。';
+const NO_TAG_SOURCE_HINT = '读取本地资料或手动打标之后，这里会显示每个来源覆盖了多少视频。';
 const NO_VOLUME_HINT = '添加媒体目录后，这里会显示存储空间。';
 const NO_LIBRARY_HINT = '把媒体目录归进媒体库后，这里会按库显示视频数。';
 const NO_LENGTH_HINT = '探测时长后，这里会显示时长分布。';
@@ -126,7 +126,6 @@ function InventoryDetail({ data, configurable, openMediaSettings }: { data: Stat
           {configurable
             ? <Button size="small" onClick={openMediaSettings}>添加媒体目录</Button>
             : null}
-          <ButtonLink variant="secondary" href="/subscriptions?tab=add" size="small">添加关注</ButtonLink>
         </>
       }>{NO_VIDEO_HINT}</EmptyState>
     );
@@ -224,7 +223,7 @@ function TagRanking({ tags, tagLabel, onTag }: { tags: TopTag[] } & StatsProps) 
   if (!tags.length) {
     return (
       <EmptyState shell="plain" icon={RiPriceTag3Line} title="还没有内容标签"
-        actions={<ButtonLink variant="secondary" href="/data-cleanup" size="small">补全资料</ButtonLink>}>{NO_TAG_HINT}</EmptyState>
+        actions={<ButtonLink variant="secondary" href="/settings/library" size="small">导入本地媒体</ButtonLink>}>{NO_TAG_HINT}</EmptyState>
     );
   }
   return (
@@ -284,7 +283,7 @@ function TagSources({ sources, videos }: { sources: TagSource[]; videos: number 
   if (!sources.length) {
     return (
       <EmptyState shell="plain" icon={RiPriceTag3Line} title="还没有标签来源"
-        actions={<ButtonLink variant="secondary" href="/data-cleanup" size="small">补全资料</ButtonLink>}>{NO_TAG_SOURCE_HINT}</EmptyState>
+        actions={<ButtonLink variant="secondary" href="/settings/library" size="small">导入本地媒体</ButtonLink>}>{NO_TAG_SOURCE_HINT}</EmptyState>
     );
   }
   return (

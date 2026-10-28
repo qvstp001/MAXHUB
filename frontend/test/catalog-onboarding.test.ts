@@ -35,7 +35,7 @@ describe('馆藏与资料空状态', () => {
     for (const kind of ['tags', 'performers', 'creators', 'studios', 'agencies', 'series']) {
       expect(catalogEmptyHtml({ kind })).toContain('data-geist-empty-state');
     }
-    expect(catalogEmptyHtml({ kind: 'tags', online: true })).toContain('关注来源');
+    expect(catalogEmptyHtml({ kind: 'tags', configurable: true })).toContain('读取本地资料');
     expect(catalogEmptyHtml({ kind: 'creators' })).toContain('还没有卖家');
   });
 });

@@ -347,14 +347,15 @@ it('一个视频都没有时给空态，能改配置就给去添加媒体目录'
   expect(host.querySelector('[role=tabpanel] section[aria-label]')).toBeNull();
   await click(buttonNamed('添加媒体目录', host));
   expect(props.openMediaSettings).toHaveBeenCalledTimes(1);
+  expect(host.querySelector('a[href^="/subscriptions"]')).toBeNull();
 });
 
-it('这台机器不能改配置时空态不给那个按钮，只留能走的那条路', async () => {
+it('这台机器不能改配置时空态只显示本地入库提示', async () => {
   const props = { ...legacyProps(), configurable: false };
   const { host } = await open(payload({ by_loc: [], by_library: [] }), props);
   expect(buttonNamed('添加媒体目录', host)).toBeNull();
-  expect(host.querySelector('a')?.textContent).toBe('添加关注');
-  expect(looksLikeButton(host.querySelector('a'))).toBe(true);
+  expect(host.querySelector('a')).toBeNull();
+  expect(host.textContent).toContain('导入本地媒体');
 });
 
 /** 空态里的去处画成次级实底按钮（白底、发丝边框），不是一行带下划线的文字链接。 */
@@ -363,10 +364,10 @@ const looksLikeButton = (link: Element | null) =>
 const linkNamed = (root: ParentNode, name: string) =>
   [...root.querySelectorAll('a')].find((a) => a.textContent === name) ?? null;
 
-it('没有内容标签时空态给一枚「补全资料」按钮，去数据整理页', async () => {
+it('没有内容标签时空态进入媒体库设置导入本地媒体', async () => {
   const { host } = await open(payload({ top_tags: [] }));
-  const link = linkNamed(host, '补全资料');
-  expect(link?.getAttribute('href')).toBe('/data-cleanup');
+  const link = linkNamed(host, '导入本地媒体');
+  expect(link?.getAttribute('href')).toBe('/settings/library');
   expect(looksLikeButton(link)).toBe(true);
 });
 
