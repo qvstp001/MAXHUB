@@ -1,17 +1,16 @@
 """Prepare isolated media, or check a running Docker/Podman deployment.
 
 python tests/container_smoke.py prepare .test-data/container-smoke/media
-QMAXHUB_TEST_PASSWORD=... python tests/container_smoke.py check http://127.0.0.1:18097
+python tests/container_smoke.py check http://127.0.0.1:18097
 The check expects only the fictional SMOKE-001 fixture in the test library.
 """
 import argparse
 import base64
 import http.client
 import json
-import os
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
 TARGET = 'https://example.test/container-smoke.mp4?token=a%2Fb&source=test'
@@ -36,13 +35,11 @@ def check(base, expect_persisted=False):
     server = urlsplit(base)
     if server.scheme not in ('http', 'https') or not server.hostname:
         raise ValueError('Expected an HTTP(S) URL')
-    password = os.environ['QMAXHUB_TEST_PASSWORD']
-    cookie = ''
 
     def request(path, body=None, extra=None, method=None):
         connection_class = http.client.HTTPSConnection if server.scheme == 'https' else http.client.HTTPConnection
         conn = connection_class(server.hostname, server.port, timeout=10)
-        headers = {'Cookie': cookie, **(extra or {})}
+        headers = dict(extra or {})
         payload = None
         if body is not None:
             headers['Content-Type'] = 'application/json'
@@ -72,10 +69,10 @@ def check(base, expect_persisted=False):
         time.sleep(1)
     require(ready, 'health endpoint')
     require(request('/')[0] == 200, 'web UI served')
-    require(request('/api/movies')[0] == 401, 'anonymous library access rejected')
-    status, headers, _ = request('/api/login', {'password': password})
-    require(status == 200, 'administrator login')
-    cookie = headers['Set-Cookie'].split(';')[0]
+    for path in ('/profiles.css', '/movie-detail.js', '/browse-state.js'):
+        require(request(path)[0] == 200, path + ' served from image')
+    require(request('/api/movies')[0] == 200, 'LAN library opens without login')
+    require(request('/api/settings')[0] == 200, 'settings available without password')
     status, _, scan = request('/api/scan', {})
     require(status == 202, 'manual scan accepted')
     while scan['running']:
@@ -84,15 +81,34 @@ def check(base, expect_persisted=False):
         time.sleep(.2)
         scan = request('/api/scan')[2]
     require(not scan['errors'], 'read-only mounted media scanned without errors')
-    items = request('/api/movies')[2]['items']
+    listing = request('/api/movies?limit=1')[2]
+    items = listing['items']
+    require(listing['total'] == 1 and listing['limit'] == 1 and 'resources' not in items[0], 'bounded summary listing')
     require(len(items) == 1 and items[0]['code'] == 'SMOKE-001', 'fictional NFO imported with correct identity')
-    movie = items[0]
+    movie = request('/api/movies/' + items[0]['id'])[2]
+    thumbnail = request(items[0]['poster'])
+    require(thumbnail[0] == 200 and thumbnail[1]['Content-Type'] == 'image/webp', 'on-demand thumbnail written by non-root container')
+    require(request(items[0]['poster'], extra={'If-None-Match': thumbnail[1]['ETag']})[0] == 304, 'private artwork revalidation')
+    for kind in ('actor', 'studio', 'tag'):
+        facet = request('/api/facets?kind=' + kind)[2]
+        require(facet['total'] == 1 and facet['items'][0]['count'] == 1, kind + ' facet counts titles')
+    for kind, name in (('actor', '测试演员'), ('studio', '测试工作室')):
+        entity = request('/api/entities?' + urlencode({'kind': kind, 'name': name}))[2]
+        require((entity['movie_count'], entity['available_count'], entity['resource_count']) == (1, 1, 2),
+                kind + ' profile counts titles and resources separately')
+    roots = request('/api/folders')[2]
+    require(len(roots['items']) == 1 and roots['items'][0]['root'] == '/media' and roots['items'][0]['count'] == 1,
+            'folder index groups multipart titles')
     if expect_persisted:
         require(movie['favorite'] and movie['watched'] and movie['rating'] == 4, 'user state survived container recreation')
     require(movie['title'] == '容器测试 & 本地元数据', 'UTF-8 metadata and XML entities preserved')
     require(len(movie['resources']) == 2, 'two STRM files grouped into one movie')
+    require(all(r['folder'] == 'SMOKE-001' and 'path' not in r for r in movie['resources']),
+            'detail resources link to indexed relative folders')
     require(request(movie['poster'])[2] == PNG, 'local poster readable')
     require(len(movie['samples']) == 1 and request(movie['samples'][0])[2] == PNG, 'local sample artwork readable')
+    require(request(movie['samples'][0] + '?size=preview')[1]['Content-Type'] == 'image/webp',
+            'small gallery previews generated inside container')
     identity = movie['id']
     require(request(f'/api/movies/{identity}/state', {'favorite': True, 'watched': True, 'rating': 4})[0] == 200, 'user state saved to data volume')
     settings = request('/api/settings')[2]

@@ -10,7 +10,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from qmaxhub.server import App, make_server
+from maxhub.server import App, make_server
 
 
 def poster(path, seed):
@@ -33,19 +33,35 @@ def poster(path, seed):
 
 
 def main():
-    root = Path(__file__).resolve().parent.parent / '.test-data' / 'preview'
+    root = Path(__file__).resolve().parent.parent / '.test-data' / 'preview-profiles'
     media = root / 'media'
     titles = ['青色时光 · 午后的片刻', '向晚的房间', '海边来信', '留在记忆里的夏天', '无声的对白', '城市另一侧', '光穿过树叶的地方', '雨后的故事']
     for i, title in enumerate(titles):
-        folder = media / f'DEMO-{i+1:03}'
+        code = f'DEMO-{i+1:03}'
+        studio = '示例厂商 A' if i % 2 == 0 else '示例厂商 B'
+        folder = media / studio
+        if i >= 4:
+            folder = folder / '示例系列'
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / 'movie.strm').write_text(f'https://example.test/fictional/{i+1}.mp4')
-        (folder / 'movie.nfo').write_text(f'<movie><num>DEMO-{i+1:03}</num><title>示例影片：{title}</title><plot>这是用于界面验证的虚构影片资料，海报为程序生成的抽象图形，播放地址仅为占位。真实影片将读取你的 NFO 和本地图片。</plot><studio>示例工作室</studio><premiered>2025-0{i+1}-12</premiered><runtime>120</runtime><rating>{7+i/10:.1f}</rating><set><name>示例收藏系列</name></set><actor><name>示例演员 {i%3+1}</name></actor><tag>示例资料</tag><genre>剧情</genre></movie>', encoding='utf-8')
-        poster(folder / 'poster.png', i)
-    app = App(root / 'data', [media], 'preview-only-123', 'http://127.0.0.1:18096', '')
+        parts = [f'{code}-CD1', f'{code}-CD2'] if i == 0 else [code]
+        for part in parts:
+            (folder / f'{part}.strm').write_text(f'https://example.test/fictional/{part}.mp4')
+        actors = folder / '.actors'
+        actors.mkdir(exist_ok=True)
+        actor = f'示例演员 {i%3+1}'
+        poster(actors / f'{actor}.png', i%3)
+        samples = ''
+        if i == 0:
+            for number in range(1, 3):
+                poster(folder / f'{code}-sample{number}.png', number+3)
+                samples += f'<sample>{code}-sample{number}.png</sample>'
+        tags = '<tag>本地收藏</tag>' if i < 6 else ''
+        (folder / f'{code}.nfo').write_text(f'<movie><num>{code}</num><title>示例影片：{title}</title><originaltitle>Fictional collection {i+1:02}</originaltitle><plot>这是用于界面验证的虚构影片资料，海报为程序生成的抽象图形，播放地址仅为占位。真实影片将读取你的 NFO 和本地图片。</plot><studio>{studio}</studio><director>示例导演</director><premiered>2025-0{i+1}-12</premiered><runtime>120</runtime><rating>{7+i/10:.1f}</rating><set><name>示例收藏系列</name></set><actor><name>{actor}</name><role>主演</role><thumb>.actors/{actor}.png</thumb></actor><tag>示例资料</tag>{tags}<genre>{"剧情" if i%2==0 else "纪录"}</genre>{samples}</movie>', encoding='utf-8')
+        poster(folder / f'{code}-poster.png', i)
+    app = App(root / 'data', [media], 'http://127.0.0.1:18096', '')
     app.scanner.start()
     server = make_server(app, '127.0.0.1', 18096)
-    print('Fictional preview: http://127.0.0.1:18096 | password: preview-only-123', flush=True)
+    print('Fictional preview: http://127.0.0.1:18096', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

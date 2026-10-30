@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from .catalog import index_movie, index_resource
+
 IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'}
 
 
@@ -46,6 +48,20 @@ def strm_target(path):
     return quote(value, safe=":/?#[]@!$&'()*+,;=%-._~")
 
 
+def directory_fingerprint(folder, files):
+    """Stat local sidecars once per directory; never open unchanged NFO/STRM files."""
+    candidates = [p for p in files if p.suffix.lower() in IMAGE_EXT | {'.strm', '.nfo'}]
+    for name in ('.actors', 'extrafanart', 'screenshots', 'javdex-samples'):
+        directory = Path(folder) / name
+        if directory.is_dir():
+            candidates.extend(p for p in directory.iterdir() if p.suffix.lower() in IMAGE_EXT)
+    digest = hashlib.sha256(b'qmaxhub-sidecars-v1')
+    for path in sorted(candidates, key=lambda p: str(p)):
+        stat = path.stat()
+        digest.update(json.dumps([str(path), str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]).encode())
+    return digest.hexdigest()
+
+
 def nfo_metadata(path, root, stem, files):
     document = ET.Element('movie')
     if path:
@@ -68,16 +84,18 @@ def nfo_metadata(path, root, stem, files):
         candidate = bounded(base / unquote(reference.replace('\\', '/')), root)
         return str(candidate) if candidate.is_file() and candidate.suffix.lower() in IMAGE_EXT else None
     lookup = {p.name.casefold(): p for p in files}
+    stems = list(dict.fromkeys([stem, re.sub(r'(?i)[-_. ](?:cd|part|disc)\d+$', '', stem)] +
+                              ([path.stem] if path and path.stem.casefold() != 'movie' else [])))
     def local(names):
         for name in names:
-            for ext in ('.jpg', '.jpeg', '.png', '.webp', '.avif'):
+            for ext in ('.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif'):
                 candidate = lookup.get((name + ext).casefold())
                 if candidate:
                     return str(bounded(candidate, root))
         return None
     poster = next((image(n.text) for n in document.findall('thumb') if n.get('aspect') == 'poster' and n.text), None)
-    poster = poster or image(text('art/poster')) or local([stem + '-poster', stem + '.poster', 'poster', 'folder', stem + '-thumb', 'thumb', stem])
-    cover = local([stem + '-landscape', stem + '-fanart', stem + '.fanart', 'fanart', stem + '-thumb', 'thumb', stem + '-cover', 'cover'])
+    poster = poster or image(text('art/poster')) or local([name + suffix for name in stems for suffix in ('-poster', '.poster')] + ['poster', 'folder'] + [name + '-thumb' for name in stems] + ['thumb', *stems])
+    cover = local([name + suffix for name in stems for suffix in ('-landscape', '-fanart', '.fanart')] + ['fanart'] + [name + '-thumb' for name in stems] + ['thumb'] + [name + '-cover' for name in stems] + ['cover'])
     cover = cover or next((image(n.text) for n in document.findall('fanart/thumb') if n.text), None)
     poster = poster or next((image(n.text) for n in document.findall('thumb') if n.text), None) or cover
     actors = []
@@ -121,32 +139,52 @@ class Scanner:
     def __init__(self, store, roots):
         self.store, self.roots = store, [Path(r).resolve() for r in roots]
         self.lock = threading.Lock()
-        self.status = {'running': False, 'processed': 0, 'errors': [], 'finished': None}
+        self.status = {'running': False, 'processed': 0, 'updated': 0, 'unchanged': 0, 'errors': [], 'finished': None}
 
-    def start(self):
+    def start(self, force=False):
         if not self.lock.acquire(blocking=False):
             return False
-        self.status = {'running': True, 'processed': 0, 'errors': [], 'finished': None}
-        threading.Thread(target=self.run, daemon=True).start()
+        self.status = {'running': True, 'processed': 0, 'updated': 0, 'unchanged': 0, 'errors': [], 'finished': None}
+        threading.Thread(target=self.run, args=(force,), daemon=True).start()
         return True
 
-    def run(self):
+    def run(self, force=False):
         generation = uuid.uuid4().hex
         try:
             for root in self.roots:
                 try:
                     if not root.is_dir():
                         raise ValueError(f'目录不可用：{root}')
+                    with self.store.connect() as db:
+                        existing = {r['id']: dict(r) for r in db.execute(
+                            'SELECT id,available,fingerprint FROM resources WHERE root=?', (str(root),))}
+                    unchanged = []
                     walk_errors = []
                     for folder, directories, filenames in os.walk(root, followlinks=False, onerror=walk_errors.append):
                         directories[:] = [d for d in directories if not d.startswith('.')]
                         files = [Path(folder) / f for f in filenames]
                         lookup = {p.name.casefold(): p for p in files}
                         streams = [p for p in files if p.suffix.lower() == '.strm']
+                        if not streams:
+                            continue
+                        try:
+                            fingerprint = directory_fingerprint(folder, files)
+                        except OSError:
+                            # Read each resource normally to report the precise failure.
+                            fingerprint = ''
                         for stream in streams:
                             resource_id = identity(str(root) + '/' + stream.relative_to(root).as_posix())
                             try:
                                 bounded(stream, root)
+                                previous = existing.get(resource_id)
+                                if not force and fingerprint and previous and previous['available'] and previous['fingerprint'] == fingerprint:
+                                    unchanged.append(resource_id)
+                                    if len(unchanged) >= 512:
+                                        self.mark_seen(generation, unchanged)
+                                        unchanged.clear()
+                                    self.status['unchanged'] += 1
+                                    self.status['processed'] += 1
+                                    continue
                                 nfo = lookup.get((stream.stem + '.nfo').casefold())
                                 part_stem = re.sub(r'(?i)[-_. ](?:cd|part|disc)\d+$', '', stream.stem)
                                 nfo = nfo or lookup.get((part_stem + '.nfo').casefold())
@@ -163,12 +201,16 @@ class Scanner:
                                     db.execute('INSERT INTO movies VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata',
                                                (movie_id, json.dumps(metadata, ensure_ascii=False), time.time()))
                                     db.execute('INSERT OR REPLACE INTO resources VALUES (?,?,?,?,?,?,?,?)',
-                                               (resource_id, movie_id, str(root), str(stream), target, 1, '', generation))
+                                               (resource_id, movie_id, str(root), str(stream), target, 1, fingerprint, generation))
+                                    index_movie(db, movie_id, metadata)
+                                    index_resource(db, resource_id, str(root), str(stream))
+                                self.status['updated'] += 1
                             except (OSError, ValueError, ET.ParseError) as error:
                                 with self.store.connect() as db:
                                     db.execute('UPDATE resources SET available=0,seen=? WHERE id=?', (generation, resource_id))
                                 self.error(stream, error)
                             self.status['processed'] += 1
+                    self.mark_seen(generation, unchanged)
                     if walk_errors:
                         for error in walk_errors:
                             self.error(root, error)
@@ -190,3 +232,8 @@ class Scanner:
     def error(self, path, error):
         if len(self.status['errors']) < 200:
             self.status['errors'].append({'path': str(path), 'message': str(error)})
+
+    def mark_seen(self, generation, identities):
+        if identities:
+            with self.store.connect() as db:
+                db.executemany('UPDATE resources SET seen=? WHERE id=?', ((generation, i) for i in identities))

@@ -20,8 +20,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      QMAXHUB_TEST_PASSWORD: ci-container-test-only
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -29,13 +27,16 @@ jobs:
           persist-credentials: false
 
       - name: Run integration tests
-        run: python3 -m unittest discover -s tests -v
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m unittest discover -s tests -v
+          node tests/browse_state.test.cjs
 
       - name: Set image metadata
         run: |
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
           echo "IMAGE_SHA=sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          echo "VERSION=$(python3 -c 'from qmaxhub import __version__; print(__version__)')" >> "$GITHUB_ENV"
+          echo "VERSION=$(python3 -c 'from maxhub import __version__; print(__version__)')" >> "$GITHUB_ENV"
 
       - name: Build image
         run: |
@@ -49,17 +50,16 @@ jobs:
       - name: Test the container
         run: |
           python3 tests/container_smoke.py prepare .test-data/container-smoke/media
-          docker run -d --name qmaxhub-ci \
+          docker run -d --name maxhub-ci \
             --cap-drop ALL --security-opt no-new-privileges:true \
             --publish 127.0.0.1:18097:8096 \
-            --env ADMIN_PASSWORD="$QMAXHUB_TEST_PASSWORD" \
             --env PUBLIC_URL=http://127.0.0.1:18097 --env SCAN_INTERVAL=0 \
             --mount "type=bind,src=$PWD/.test-data/container-smoke/media,dst=/media,readonly" \
-            --mount type=volume,src=qmaxhub-ci-data,dst=/data \
+            --mount type=volume,src=maxhub-ci-data,dst=/data \
             "$IMAGE:$IMAGE_SHA"
           python3 tests/container_smoke.py check http://127.0.0.1:18097
-          docker exec qmaxhub-ci python -m qmaxhub.healthcheck
-          docker restart qmaxhub-ci
+          docker exec maxhub-ci python -m maxhub.healthcheck
+          docker restart maxhub-ci
           python3 tests/container_smoke.py check http://127.0.0.1:18097 --expect-persisted
 
       - name: Log in to GHCR
@@ -83,4 +83,4 @@ jobs:
 
       - name: Show container logs on failure
         if: failure()
-        run: docker logs --tail 100 qmaxhub-ci || true
+        run: docker logs --tail 100 maxhub-ci || true

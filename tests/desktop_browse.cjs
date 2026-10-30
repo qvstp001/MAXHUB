@@ -1,0 +1,72 @@
+// 先启动 tests/desktop_fixture.py。Playwright 仅用于开发期桌面验收。
+const {chromium}=require('playwright');
+const assert=require('node:assert/strict');
+(async()=>{
+  const browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||undefined});
+  let page;
+  try {
+    page=await browser.newPage({viewport:{width:1440,height:1000},colorScheme:'light',reducedMotion:'reduce'});
+    const base=process.env.MAXHUB_TEST_URL||'http://127.0.0.1:18099',errors=[],folderCalls=[];
+    page.on('pageerror',e=>errors.push(e.message));
+    page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+    page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+': '+r.url());});
+    page.on('request',r=>{const u=new URL(r.url());if(u.pathname==='/api/folders')folderCalls.push(u.searchParams);});
+    const count=async(total,shown=Math.min(total,60))=>page.waitForFunction(({total,shown})=>document.querySelector('#results .results-label>span')?.textContent.startsWith(total+' 部影片')&&document.querySelector('#collection-stats')?.textContent.startsWith(total+' 部影片')&&document.querySelectorAll('.movie-card').length===shown,{total,shown});
+    const choose=async(kind,values)=>{
+      const picker=page.locator('[data-picker="'+kind+'"]');await picker.locator('summary').click();
+      await picker.locator('.picker-option').first().waitFor();
+      for(const value of values)await picker.locator('.picker-option').filter({hasText:value}).click();
+      await picker.locator('[data-picker-apply]').click();
+    };
+    await page.goto(base);await count(80);console.log('PASS initial listing');
+    await page.locator('#sort').selectOption('title');await count(80);
+    await page.getByRole('button',{name:'下一页',exact:true}).click();await count(80,20);
+    assert.match(page.url(),/page=2/);assert.match(await page.locator('.movie-card').first().innerText(),/DESK-060/);
+    await page.evaluate(()=>scrollTo(0,700));
+    await page.locator('a.nav-link[href="#actors"]').click();await page.locator('.actor-card').first().waitFor();
+    await page.goBack();await count(80,20);await page.waitForFunction(()=>scrollY>=690);
+    await page.reload();await count(80,20);assert.match(page.url(),/sort=title/);
+    await page.locator('a.nav-link[href="#library"]').click();await count(80);console.log('PASS navigation and page restoration');
+    await choose('actor',['演员甲']);await count(40);
+    await choose('studio',['厂商甲']);await count(20);
+    await choose('tag',['剧情','收藏']);await count(7);
+    assert.equal(await page.locator('.combo-chip').count(),4);console.log('PASS combined selection');
+    await page.locator('[data-action="remove-filter"][data-kind="studio"]').click();await count(14);
+    await page.goBack();await count(7);await page.reload();await count(7);
+    await page.getByRole('link',{name:'打开目录树'}).click();await count(7);console.log('PASS independent removal and reload');
+    await page.locator('#folder-tree .tree-expand').first().click();
+    await page.locator('.folder-tree-row>a').filter({hasText:'厂商甲'}).first().waitFor();
+    assert(!folderCalls.some(p=>(p.get('path')||'').includes('子目录')));
+    await page.locator('.folder-tree-row>a').filter({hasText:'厂商甲'}).first().click();await count(7);
+    await page.locator('#folder-recursive').uncheck();await count(4);
+    assert.match(page.url(),/recursive=0/);
+    await page.locator('.folder-tree-row>a').filter({hasText:'子目录'}).first().click();await count(3);
+    await page.locator('.folder-breadcrumbs a').filter({hasText:'厂商甲'}).click();await count(4);
+    await page.locator('#folder-search').fill('子目录');
+    await page.waitForFunction(()=>document.querySelectorAll('.folder-search-result').length===2);
+    await page.locator('.folder-search-result').filter({hasText:'厂商甲'}).click();await count(3);
+    assert.equal(await page.locator('#folder-search').inputValue(),'');
+    await page.locator('#folder-search').fill('子目录');
+    await page.waitForFunction(()=>document.querySelectorAll('.folder-search-result').length===2);
+    await page.locator('.folder-search-result').filter({hasText:'厂商甲'}).click();await count(3);
+    assert.equal(await page.locator('#folder-search').inputValue(),'');
+    await page.locator('[data-action="remove-filter"][data-kind="folder"]').click();await count(7);
+    await page.getByRole('button',{name:'全部清除',exact:true}).click();await count(80);
+    assert.equal(await page.locator('.combo-chip').count(),0);
+    await page.locator('.poster-open').first().click();await page.locator('.detail-heading').waitFor();
+    await page.getByRole('button',{name:'选择播放器'}).click();await page.locator('.player-links').waitFor();
+    await page.getByRole('button',{name:'关闭详情'}).click();await count(80);
+    await choose('tag',['共有']);await count(80);
+    await page.locator('#search').fill('没有这个影片');await count(0);
+    await page.locator('[data-action="remove-filter"][data-kind="search"]').click();await count(80);
+    await page.locator('.sidebar [data-action="theme"]').click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+    await page.setViewportSize({width:1100,height:800});
+    await page.locator('[data-picker="tag"] summary').click();await page.locator('[data-picker="tag"] .picker-option').first().waitFor();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.keyboard.press('Escape');assert.equal(await page.locator('[data-picker="tag"]').getAttribute('open'),null);
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    assert.deepEqual(errors,[]);
+    console.log('PASS desktop: combined filters, multiple tags, independent removal, URL reload/back/scroll, lazy folder branches, direct/recursive scope, breadcrumbs, folder search, empty results, paging and playback');
+  } catch(error){if(page){console.error('Desktop state:',page.url(),await page.locator('#results').innerText().catch(()=>''));await page.screenshot({path:'artifacts/desktop-browse-failure.png',fullPage:true}).catch(()=>{});}throw error;}
+  finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

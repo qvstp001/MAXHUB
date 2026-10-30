@@ -2,15 +2,25 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111514">
-  <title>QMaxHub · 私人影库</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>MAXHUB · 私人影库</title>
+  <script src="/theme.js"></script>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/catalog-controls.css">
+  <link rel="stylesheet" href="/profiles.css">
+  <script src="/browse-state.js" defer></script>
+  <script src="/folder-browser.js" defer></script>
+  <script src="/filter-picker.js" defer></script>
+  <script src="/movie-detail.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
   <div id="app"><div class="loading">正在打开你的影库…</div></div>
   <dialog id="detail" aria-label="影片详情"></dialog>
+  <dialog id="lightbox" aria-label="本地剧照"></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

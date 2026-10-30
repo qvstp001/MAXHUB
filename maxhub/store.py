@@ -8,7 +8,7 @@ from pathlib import Path
 class Store:
     def __init__(self, directory):
         Path(directory).mkdir(parents=True, exist_ok=True)
-        self.path = Path(directory) / 'qmaxhub.sqlite3'
+        self.path = Path(directory) / 'qmaxhub.sqlite3'  # Legacy filename preserves existing data volumes.
         with self.connect() as db:
             db.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -20,10 +20,10 @@ class Store:
                     path TEXT NOT NULL, target TEXT NOT NULL, available INTEGER NOT NULL,
                     fingerprint TEXT NOT NULL, seen TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS resources_movie ON resources(movie_id);
+                CREATE INDEX IF NOT EXISTS resources_root ON resources(root);
                 CREATE TABLE IF NOT EXISTS user_state (
                     movie_id TEXT PRIMARY KEY, favorite INTEGER DEFAULT 0,
                     watched INTEGER DEFAULT 0, rating INTEGER DEFAULT 0, last_played REAL);
-                CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires REAL NOT NULL);
             ''')
             for key in ('api_key', 'signing_key', 'server_id'):
                 db.execute('INSERT OR IGNORE INTO settings VALUES (?,?)', (key, json.dumps(secrets.token_hex(24))))
@@ -32,6 +32,8 @@ class Store:
             db.execute('DELETE FROM settings WHERE key=?', ('litepan_url',))
             db.execute('UPDATE settings SET value=? WHERE key=? AND value=?',
                        (json.dumps('proxy'), 'playback_mode', json.dumps('litepan')))
+        from .catalog import Catalog
+        self.catalog = Catalog(self)
 
     @contextmanager
     def connect(self):

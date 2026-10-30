@@ -1,196 +1,158 @@
-# QMaxHub
+# MAXHUB
 
-面向 STRM 与本地 NFO 的私人影片资料库。浏览器管理，Docker 常驻运行，Windows PotPlayer / Android mpv 外部播放。
+在飞牛 fnOS NAS 上通过 Docker 运行的私人 STRM 媒体库。仅面向局域网部署，网页不设登录。读取已经刮削好的本地 NFO 和图片，通过 LitePan 的 Emby 反代入口播放。
 
-当前为 **0.1.1 基础版本**。后端使用 Python 标准库与 SQLite，前端为原生 JavaScript，无需安装第三方运行依赖或构建前端。管理方式参考本机 Javdex 的番号、演员、标签与系列组织方式，代码独立实现。
+当前版本：**0.2.0**。界面参考 Peach 的桌面交互重新实现，支持可收起侧栏、演员与厂商资料页、组合筛选、目录树、影片详情、浅色/深色主题。列表使用独立分页索引，前端无需构建。
 
-## 已实现
+源码：[qvstp001/MAXHUB](https://github.com/qvstp001/MAXHUB) · 镜像：`ghcr.io/qvstp001/maxhub:0.2.0` · [版本说明](CHANGELOG.md) · [换电脑继续开发](docs/DEVELOPMENT.md)
 
-- 递归扫描多个来源目录中的 `.strm`，读取同名 NFO、分段共用 NFO、`movie.nfo`。
-- 提取番号、片名、简介、发行日期、时长、制作商、导演、系列、评分、标签与演员。
-- 读取本地海报、封面、演员头像与剧照；支持 `poster`、`fanart`、`.actors`、`extrafanart`、`screenshots`、`javdex-samples`。
-- 同番号的多个文件归并为一部影片，详情中选择具体资源。
-- 搜索、排序、横竖封面切换、演员 / 标签 / 系列 / 制作商导航。
-- 收藏、手动已看标记、个人评分持久保存；重新扫描不覆盖个人状态。
-- 启动扫描、手动扫描、定时扫描与逐项错误报告。源文件消失或损坏时保留收藏记录并标记资源不可用。
-- 管理员密码登录、会话 Cookie、限速、限定资源的 12 小时播放票据。
-- 提供播放反代对接所需的 Emby 兼容 API 子集、302 跳转、PotPlayer 协议链接、Android mpv Intent、复制链接与 M3U 下载。
+项目保留原仓库及 [Peach 上游](https://github.com/peach-mitao/peach) 的版权与 [AGPL-3.0-or-later 许可证](LICENSE)（上游基线 `de22796c04919aaa057d77930c33c81313765569`）。界面参考来源与交互对照见文末及桌面说明。
 
-## 播放链路
+网页以桌面浏览与管理为主，后续另做 App，本阶段不进行手机网页专项验收。Peach 后续可参考的交互、实施优先级和 App 接口边界见 [桌面界面对照](docs/desktop-ui-review.md)。
 
-支持两种 STRM 302 播放方式，可按实际部署选择工具和地址。
+## 核心功能
 
-```text
-302 反代入口：
-浏览器选择影片 → 本地播放器 → 自定义反代播放入口
-  → 反代工具读取 QMaxHub 媒体源 → 解析 STRM 并返回网盘直链
+- 本地 STRM 入库，读取同名 NFO、分段共用 NFO 或 `movie.nfo`；相同番号的多个资源归并展示。
+- 读取本地 `poster`、`fanart`、`thumb`、`.actors` 和剧照，不请求远程刮削网站。
+- 从**演员、文件夹、厂商、影片标签**浏览媒体库；支持组合筛选、多标签交集、搜索、排序、横竖封面与缺失资源筛选。
+- 目录树按分支展开，支持目录搜索、完整路径导航，以及只看本层或包含子文件夹。
+- 演员、厂商资料页显示本地头像、馆藏影片/资源数量、发行年份和关联筛选；多分段按一部影片统计。
+- 桌面详情采用图片与资料分区，支持本页上一部/下一部、本地剧照放大、资源切换和设备播放器偏好。
+- 数据库完成筛选和分页，每页默认 60 部，最大 100 部；点击影片后才读取完整简介、演员和资源信息。
+- 海报墙和演员列表按需生成 WebP 缩略图并保存到数据卷；图片支持条件缓存。原始图片保持不变。
+- 增量扫描跳过文件属性未变化的 STRM/NFO/图片；启动扫描、手动扫描与可配置的定时扫描。
+- LitePan 需要的 Emby 接口子集、签名播放链接、PotPlayer、Android mpv、复制链接和 M3U。
 
-STRM 地址直连：
-浏览器选择影片 → 本地播放器 → QMaxHub 签名播放地址
-  → 302 跳转到 STRM 中的 HTTP(S) 地址 → 对应服务解析或播放
-```
+主界面已去掉收藏、已看、个人评分和随机发现等入口。旧数据库中的个人状态仍然保存，升级不清空数据。媒体目录始终只读；这里的管理指浏览、分类与筛选，不改写 NFO 或移动源文件。
 
-QMaxHub 在 `MediaSources[].Path` 中提供 STRM 内的 HTTP(S) 地址，供兼容的反代工具识别。它不下载媒体、不探测视频、不转码，也不提前缓存临时网盘直链。每次读取播放信息或直接跳转时都会重新读取 STRM 文件。
+## 桌面筛选与目录浏览
 
-服务访问地址、反代地址、端口和路径前缀均可配置。反代模式需要工具支持 QMaxHub 提供的 Emby 兼容接口；如果其他工具直接提供可播放的 STRM 地址，可选择 STRM 地址直连模式。
+在筛选条中选择演员、厂商或影片标签，再点「应用筛选」。各类条件同时生效；标签可选择多个，影片需要满足全部所选标签。生效条件逐项展示，可单独移除，也可「全部清除」。
 
-## Docker 部署
+点击「文件夹」打开目录树，会保留当前筛选。展开节点才读取该分支；可搜索目录并沿完整路径跳转。「包含子文件夹」默认开启，关闭后仅查看当前目录直属的影片。目录树的数量按全库统计，影片区和筛选条显示实际匹配数量。
 
-需要 Docker Engine / Docker Desktop 与 Compose。
+筛选、目录范围、搜索、排序和页码保存在地址中。刷新和浏览器前进/后退会恢复这些条件；当前会话中返回列表也会恢复滚动位置。候选筛选项、目录分支和影片均分页读取，不在浏览器加载全库详情。
 
-1. 复制 `.env.example` 为 `.env`。
-2. 修改 `ADMIN_PASSWORD`（至少 10 个字符）、`MEDIA_PATH` 和 `PUBLIC_URL`；使用外部反代时再填写 `PLAYBACK_PROXY_URL`。
-3. 在本项目目录执行：
+点击演员或厂商进入资料页；关联演员、厂商和标签按钮会在该资料页内叠加筛选，页头读数保持该演员/厂商的全部馆藏统计。移除主要身份条件会回到媒体库，保留其它条件。
 
-```sh
-docker compose up -d --build
-```
+影片详情可切换本页作品（左右方向键），查看海报、横幅和原图。剧照展开后才请求缩略图，每次最多新增 12 张；放大后用方向键切换、Esc 返回详情。播放资源旁可跳到所在目录。切换影片或资源会清除旧播放链接，播放器选择保存在当前设备；播放链接不会写入浏览器存储。
 
-浏览器访问配置的 `PUBLIC_URL`，用 `.env` 中的密码登录。启动会自动扫描一次；进入「设置与扫描」查看结果。
+## 飞牛 fnOS 部署
 
-### 使用 GHCR 镜像
+将源码放入 NAS 的应用目录，通过终端或飞牛 Docker 的 Compose 项目部署。
 
-镜像地址：`ghcr.io/qvstp001/qmaxhub:latest`，当前发布平台为 Linux / amd64。准备同样的 `.env`，使用预构建镜像启动：
+推荐使用已发布镜像：下载本仓库的 `compose.ghcr.yaml` 和 `.env.example`，按下文配置后运行：
 
 ```sh
 docker compose -f compose.ghcr.yaml pull
 docker compose -f compose.ghcr.yaml up -d
 ```
 
-Podman 使用对应的 `podman compose -f compose.ghcr.yaml` 命令。该镜像已公开，可匿名拉取。
+`.env.example` 默认固定 `0.2.0`；`MAXHUB_IMAGE_TAG=latest` 跟随主分支的已验证构建。源码构建方式如下。
 
-仓库的 `Publish GHCR image` 工作流会在推送到 `main` 时运行集成测试与容器检查，通过后发布 `latest` 和 `sha-<提交短编号>`。推送 `v*` 标签时还会发布去掉 `v` 的版本标签。可以在 `.env` 中设置 `QMAXHUB_IMAGE_TAG=sha-...` 固定某次镜像。发布使用 GitHub 自动提供的临时令牌，不需要在仓库保存个人访问令牌。
-
-示例配置：
+1. 复制 `.env.example` 为 `.env`。
+2. 设置本地媒体路径、NAS 访问地址和 LitePan 反代入口。下面的媒体路径仅为示例，使用飞牛中该文件夹的实际路径。
 
 ```dotenv
-ADMIN_PASSWORD=use-your-own-long-password
-MEDIA_PATH=D:/Media/JAV
-QMAXHUB_PORT=8096
+MEDIA_PATH=/vol1/1000/media/strm
+MAXHUB_PORT=8096
+MAXHUB_IMAGE_TAG=0.2.0
+MAXHUB_DATA_VOLUME=maxhub-data
 PUBLIC_URL=http://192.168.1.10:8096
-PLAYBACK_PROXY_URL=https://proxy.example/media
+PLAYBACK_PROXY_URL=http://192.168.1.10:18443
 SCAN_INTERVAL=1800
-COOKIE_SECURE=false
 ```
 
-Linux / NAS 的 `MEDIA_PATH` 可以是 `/volume1/media/jav`。镜像以 UID / GID `10001:10001` 运行，需要对来源目录有读取与遍历权限。数据库默认保存在命名卷 `qmaxhub-data`；媒体目录以 `:ro` 挂载。
-
-若原 Emby 占用 8096，可先设 `QMAXHUB_PORT=8097`，同时把 `PUBLIC_URL` 和反代工具的上游改成对应的宿主机地址。容器内部默认 8096，也可通过 `PORT` 单独配置。确认新库工作正常后再自行决定如何处理原 Emby。
-
-### 302 反代配置
-
-在「设置与扫描 → 播放连接」选择播放方式：
-
-- **302 反代入口**：填写反代工具对外提供的完整播放地址，例如 `https://proxy.example/media` 或 `http://192.168.1.10:18443`。没有指定的必用工具或端口。
-- **STRM 地址直连（302 跳转）**：播放器先访问 QMaxHub，再由 QMaxHub 302 跳转至 STRM 内地址。适用于 STRM 本身已指向其他工具提供的播放服务。
-
-对接支持 Emby 兼容接口的工具时，在「反代工具对接」复制 API Key，将本服务可达地址设为工具的上游。工具与 QMaxHub 在同一个 Docker 网络时可使用容器名和实际内部端口；跨 Compose 项目需要加入同一网络，或使用可达的宿主机地址。播放器使用的入口必须是其设备能访问的地址。
-
-如 STRM 内填写的是容器内部地址或 `127.0.0.1`，可以在「STRM 地址替换」中配置原地址前缀与替换地址。替换保留路径、查询参数和原有签名。QMaxHub 只支持 HTTP(S) 资源，不支持 `file://`、本地视频路径或 Kodi 的 `URL|Header=...` 格式。
-
-反代工具的播放拦截与认证行为由对应工具控制。QMaxHub 的播放票据不能替代反代入口的访问控制。外部工具的具体兼容性仍需按其版本联调。
-
-升级时会自动迁移数据库中的旧反代地址和播放模式，保留 API Key、签名密钥与收藏状态。新部署使用通用环境变量 `PLAYBACK_PROXY_URL`，也可以直接在网页中配置。
-
-### 使用 Podman
-
-已在 Windows + Podman 5.6.0 / WSL Linux amd64 上验证镜像构建、Compose 启动、健康检查及容器重建后的数据保留。
-
-虚拟机未启动时先执行 `podman machine start`。准备好 `.env` 后运行：
+3. 在项目目录构建并启动：
 
 ```sh
-podman compose up -d --build
+docker compose up -d --build
 ```
 
-Windows 的 Podman WSL 环境挂载路径请填写虚拟机可访问的路径，例如宿主机 `D:/Media/JAV` 对应 `.env` 中的 `MEDIA_PATH=/mnt/d/Media/JAV`。Docker Desktop 仍使用前文的 Windows 路径示例。
+打开 `PUBLIC_URL` 即可使用，无需密码。启动时后台扫描，已有媒体库可直接浏览。初次部署需要等扫描入库。
 
-如果单独使用 `podman build`，建议使用 `podman build --format docker -t qmaxhub .` 保留镜像健康检查。Compose 已显式定义同一检查，因此不依赖镜像格式是否保留它。
+`18443` 只是反代端口示例，应填写 LitePan 实际显示的反代入口。若已有服务占用 8096，可将 `MAXHUB_PORT` 和 `PUBLIC_URL` 改为 8097。修改网页中保存过的播放配置时，使用「设置」，环境变量只用于首次初始化。无需设置管理员密码或 Cookie 配置；旧环境中保留这些变量也不会启用登录。
 
-本次测试遇到 WSL 虚拟机继承的 `127.0.0.1:7897` 代理不可达；单次拉取时清除代理环境变量后成功下载 Python 基础镜像。遇到同类下载错误时，应先检查虚拟机的代理可达性。
+容器以 UID/GID `10001:10001` 运行，需有媒体目录的读取和遍历权限。媒体以只读方式挂载到 `/media`；SQLite 与缩略图保存在 `MAXHUB_DATA_VOLUME` 指定的命名卷，默认 `maxhub-data`。更新时保留此卷。
 
-### 本地播放器
+多目录需要增加 Compose 挂载项，并将 `LIBRARY_ROOTS` 改为 `/media-a;/media-b` 或 JSON 数组。不同来源的同名文件夹独立显示；目录内的多分段按影片计数。
 
-进入影片详情，选择资源，点击「选择播放器」，再点击对应播放器链接。
-
-- **Windows PotPlayer**：需要已安装 PotPlayer，并为浏览器注册 `potplayer://` 协议处理程序。不同安装方式不一定自动注册；如果浏览器没有唤起播放器，可下载 M3U 后用 PotPlayer 打开，或复制播放链接到 PotPlayer 的「打开链接」。
-- **Android mpv**：使用 `intent://...#Intent;scheme=http(s);type=video/any;package=is.xyz.mpv;end;`，要求安装官方包名 `is.xyz.mpv` 的 mpv-android，并使用允许 Intent 跳转的浏览器。其他 mpv 分支可能需要不同包名。
-- **其他播放器**：复制 HTTP 播放链接，或下载 M3U。
-
-浏览器无法确认外部播放器是否真正启动，也无法收取它的播放进度；观看状态需要手动标记。播放链接有效期 12 小时，过期后重新打开即可。网盘的 UA、IP 或账号限制由对应播放服务和播放器实际处理，本项目不代传自定义播放请求头。
-
-## 媒体目录布局
+## LitePan 对接
 
 ```text
-JAV/
-  ABC-123/
-    ABC-123.strm
-    ABC-123.nfo            # 或 movie.nfo
-    ABC-123-poster.jpg     # 或 poster.jpg / folder.jpg
-    ABC-123-fanart.jpg     # 或 fanart.jpg / ABC-123-landscape.jpg
-    .actors/
-      演员名字.jpg
-    extrafanart/
-      1.jpg
-      2.jpg
+MAXHUB 页面 → 此设备的外部播放器 → LitePan Emby 反代入口
+  → MAXHUB Emby 接口返回 STRM 地址 → LitePan 解析并提供播放
 ```
 
-优先读取和 STRM 同名的 NFO；`ABC-123-CD1.strm` 也可读取 `ABC-123.nfo`。仅单影片目录或相同分段名目录使用共用 `movie.nfo`；单 STRM 目录还可匹配唯一 NFO，避免误用其他影片资料。
+在 LitePan 的「增强工具 → Emby 反代」中：
 
-图片支持 JPG、JPEG、PNG、WebP、GIF、AVIF（显示能力取决于浏览器）。只读取媒体根目录内的本地文件；NFO 中的远程图片引用不会自动下载。NFO 使用 UTF-8 / UTF-8 BOM，每个文件上限 2 MiB，不允许 DTD 或实体声明。
+1. Emby 地址填写 LitePan 可访问的 MAXHUB 地址，例如 `http://NAS-IP:8096`。如果两个容器在同一 Docker 网络，也可使用 `http://maxhub:8096`。
+2. API Key 从 MAXHUB「设置 → LitePan 对接」复制，测试连接并启用反代。此 Key 用于 LitePan 的服务对接，网页无需输入。
+3. 将 LitePan 显示的反代入口保存到 MAXHUB 的播放设置，选择「302 反代入口」。这个入口需要能被实际播放设备访问。
 
-来源目录为只读，应用不修改 STRM、NFO 或图片。缺失标记以完整成功遍历的目录为依据；目录访问错误会记录异常，不把访问失败直接当成文件被删除。扫描是全量元数据重读，未实现文件监听或增量指纹加速。
+媒体源中的 `Path` 是每次重新读取的 STRM HTTP(S) 地址，不是 NAS 的文件路径，不缓存临时网盘直链。已按 LitePan 公开实现验证 `/System/Info`、`/emby/Items?Ids=...&Fields=Path,MediaSources`、多媒体源选择、API Key 认证和刷库接口；真实网盘、UA/IP 限制及已安装的 LitePan 版本仍需实机联调。LitePan 自己的入口访问控制由 LitePan 管理。
 
-## 数据与配置
+LitePan 的反代实现识别自己的 STRM 路径，须使用其可识别的生成地址。如果 STRM 已指向其他可播放 HTTP(S) 服务，可在高级使用中选择「STRM 地址直连」。不支持本地视频路径、`file://`、Kodi `URL|Header=...`，也不传输或转码视频。
 
-`/data/qmaxhub.sqlite3` 保存索引、用户状态、会话、API Key 与签名密钥。备份时停止容器，再备份整个数据卷，避免遗漏 SQLite 的 WAL 文件；来源媒体目录独立备份。不要删除数据卷来更新程序。
+参考：[LitePan 配置说明](https://www.litepan.top/guide/tools/enhanced.html)、[LitePan 反代实现](https://github.com/Ponphil/LitePan/blob/main/internal/embyproxy/service.go)。
 
-首次启动用环境变量初始化播放设置。之后网页中保存的配置优先，不会被每次重启覆盖。更改播放地址或扫描周期请在网页保存。修改 `ADMIN_PASSWORD` 后重建容器，已有登录会话失效。
+## 媒体目录
 
-多目录可修改 Compose 的挂载项，并将环境变量 `LIBRARY_ROOTS` 设为 `/media-a;/media-b`，或 JSON 数组。不同库中相同番号会合并为一部影片的多个资源。
-
-## 本地开发与验证
-
-Python 3.12 或更高版本：
-
-```powershell
-$env:ADMIN_PASSWORD = 'your-local-test-password'
-$env:LIBRARY_ROOTS = 'D:/Media/JAV'
-$env:PUBLIC_URL = 'http://localhost:8096'
-$env:PLAYBACK_PROXY_URL = 'https://proxy.example/media'
-python -m qmaxhub
+```text
+strm/
+  厂商或自定义分类/
+    ABC-123/
+      ABC-123.strm
+      ABC-123.nfo        # 也支持 movie.nfo
+      ABC-123-poster.jpg # 或 poster.jpg / folder.jpg
+      ABC-123-fanart.jpg # 或 fanart.jpg / thumb.jpg
+      .actors/
+        演员名字.jpg
+      extrafanart/
+        1.jpg
 ```
 
-运行自动化测试：
+优先匹配 STRM 同名 NFO，`ABC-123-CD1.strm` 可共用 `ABC-123.nfo`。共用 `movie.nfo` 只用于可确定为单影片的目录，避免将不同影片错误归并。无番号时按资源路径确定身份。
+
+NFO 为 UTF-8 或 UTF-8 BOM，最大 2 MiB，根节点为 `movie`。图片支持 JPEG、PNG、WebP、GIF、AVIF。厂商从 `studio` 或 `maker` 读取，影片标签来自 `tag` 和 `genre`，演员来自 `actor/name`。
+
+## 数据与升级
+
+`/data/qmaxhub.sqlite3` 是资料索引、配置和旧个人状态；`/data/artwork` 是可重建的缩略图缓存。来源 STRM/NFO/图片独立保存。备份时停止容器，再备份整个数据卷。
+
+升级旧库时自动建立新的浏览索引，保留影片 ID、播放密钥及旧状态。新索引建立一次，之后不需要每次重启重建。扫描遇到损坏文件会记录异常；目录访问失败不会直接当作文件被删除。增量判断使用文件大小、修改/变更时间及本地资料目录内容，不是实时文件监听。如果来源存储未正确更新文件属性，可以在设置中点击「重读全部资料」，强制重新读取本地元数据。
+
+数据库文件名继续使用 `qmaxhub.sqlite3`，便于保留旧版数据。若已经运行 QMaxHub，先停止旧容器并备份数据卷，再将 `MAXHUB_DATA_VOLUME` 设置为旧卷的实际名称（用 `docker volume ls` 确认，常见为 `qmaxhub_qmaxhub-data`），保持媒体在容器内的挂载路径一致后启动 MAXHUB。旧 `QMAXHUB_PORT` 变量仍可作为兼容回退，新部署使用 `MAXHUB_PORT`。浏览器的主题、密度和播放器偏好会自动迁移。
+
+这里的旧库指旧 QMaxHub 的 `qmaxhub.sqlite3`。远端 Peach 版的 `ledger.db` 不属于该格式；此轻量版使用独立数据卷，从只读媒体目录重新扫描入库，不改写 Peach 数据库。切勿直接把 Peach 数据卷当作 MAXHUB 的现成数据库。
+
+## 开发与验证
+
+运行时为 Python 3.12+、SQLite 与 Pillow（仅负责图片缩放），前端为原生 JavaScript，无前端构建步骤。
+
+```sh
+python -m pip install -r requirements.txt
+# 先配置 LIBRARY_ROOTS、PUBLIC_URL 等环境变量
+python -m maxhub
+```
 
 ```sh
 python -m unittest discover -s tests -v
-```
-
-容器验收可先用 `python tests/container_smoke.py prepare .test-data/container-smoke/media` 生成独立虚构媒体，再将该目录只读挂载到测试容器的 `/media`。它包含一部 `SMOKE-001` 影片、两个 STRM 和本地图片。只对该隔离测试库运行以下检查：
-
-```powershell
-$env:QMAXHUB_TEST_PASSWORD = 'your-isolated-container-password'
-python tests/container_smoke.py check http://127.0.0.1:18097
-# 重建容器后，先验证此前写入的状态仍在
-python tests/container_smoke.py check http://127.0.0.1:18097 --expect-persisted
-```
-
-检查只验证 STRM 的 302 跳转，不会访问占位播放地址或真实网盘。
-
-打开虚构资料预览（不读取真实媒体，不包含有效视频地址）：
-
-```sh
+node tests/browse_state.test.cjs
+python tests/benchmark_catalog.py 10000
 python tests/preview.py
 ```
 
-访问 `http://127.0.0.1:18096`，密码 `preview-only-123`。数据与抽象示例海报写入 `.test-data/preview`，与实际应用数据隔离。此预览只监听本机。
+预览只使用虚构资料，访问 `http://127.0.0.1:18096`。详情、分页、目录、缩略图和 LitePan 接口的验证范围见 [验证记录](docs/validation.md)。
 
-## 当前兼容范围
+桌面浏览器验收使用独立的 80 部虚构影片：先在一个终端运行 `python tests/desktop_fixture.py`，再在具备 Playwright 开发环境的终端运行 `node tests/desktop_browse.cjs` 和 `node tests/desktop_profiles.cjs`。可用 `PLAYWRIGHT_BROWSER_CHANNEL` 指定已安装的浏览器，例如 `msedge`。此工具只用于开发验收，不属于容器运行依赖；不执行手机端检查。
 
-提供 `/System/Info`、`/Items/{id}`、`/Items/{id}/PlaybackInfo`、`/Items?Ids=...`、`/Videos/{id}/stream`、媒体目录列表和扫描任务接口；支持可选 `/emby` 前缀以及常见 Emby API Key 传递方式。
+`/api/movies` 现在返回分页摘要 `{items,total,page,limit}`；详情使用 `/api/movies/{id}`。如有使用旧版完整列表响应的外部脚本，需要改用分页和详情接口。
 
-这是供播放反代工具使用的 **Emby 兼容接口子集**，不是完整 Emby 服务，未承诺 Emby / Infuse 等客户端完整接入。没有转码、内置播放器、刮削、多用户权限、DLNA、远程图片采集或外部播放器进度同步。
+组合筛选接口示例：`/api/movies?actor=演员名&studio=厂商名&tag=标签一&tag=标签二&root=/media&folder=分类&recursive=0`。重复 `tag` 表示交集，最多 20 项。`recursive=0` 仅查看直属影片，默认 `1` 包含子目录。目录接口 `/api/folders` 额外返回 `selected` 和 `ancestors`；节点含 `name`、`count`、`direct_count`、`has_children`，支持 `search`、`page`、`limit`。
 
-验证记录与实际边界见 [验证记录](docs/validation.md)。
+资料页接口 `/api/entities?kind=actor&name=演员名` 或 `kind=studio` 返回影片数、可用影片数、资源数、年份和关联筛选项；每类关联项最多 8 个，其余通过通用筛选器查找。统计仅查询数据库索引，资源可用指扫描时的本地文件状态。详情资源新增相对于来源根目录的 `folder`，可用于目录跳转；剧照 `?size=preview` 返回最大 320 × 200 的 WebP 缩略图。
 
-外部播放器接口参考：[mpv-android Intent 规范](https://github.com/mpv-android/mpv-android/blob/master/docs/intent.html)。
+MAXHUB 提供供 LitePan 使用的 Emby 接口子集，不提供完整 Emby 客户端登录、多用户、转码、在线刮削、DLNA 或播放进度同步。
+
+界面参考的是远端 `main` 在 `a9bd476bdb61cf83f753e0e10ee52f2460e92953` 的 Peach 基线，具体布局依据为其顶栏、侧栏、演员/厂牌快捷条与卡片样式。本地旧检出不含该界面。轻量版没有加载 Peach 的完整前端包或附带功能。参考 [该版本源码](https://github.com/qvstp001/qmaxhub/tree/a9bd476bdb61cf83f753e0e10ee52f2460e92953)。
