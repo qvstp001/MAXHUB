@@ -6,7 +6,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY maxhub ./maxhub
 COPY web ./web
 COPY LICENSE ./LICENSE
-LABEL org.opencontainers.image.title="MAXHUB" org.opencontainers.image.licenses="AGPL-3.0-or-later"
+LABEL org.opencontainers.image.title="MAXHUB" \
+      org.opencontainers.image.description="Lightweight local STRM media library for fnOS and Docker, with LitePan Emby 302 playback." \
+      org.opencontainers.image.source="https://github.com/qvstp001/MAXHUB" \
+      org.opencontainers.image.url="https://github.com/qvstp001/MAXHUB/pkgs/container/maxhub" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 RUN groupadd --gid 10001 maxhub && useradd --uid 10001 --gid maxhub --no-create-home maxhub && mkdir -p /data /media && chown maxhub:maxhub /data
 USER maxhub
 EXPOSE 8096

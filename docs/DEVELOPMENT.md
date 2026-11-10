@@ -127,11 +127,13 @@ docker rm maxhub-test
 
 ## 发布与回退
 
-源码仓库：[qvstp001/MAXHUB](https://github.com/qvstp001/MAXHUB)。容器镜像：`ghcr.io/qvstp001/maxhub`。GitHub Actions 的 `Publish GHCR image` 在 `main` 推送或 `v*` 标签时运行。
+源码仓库：[qvstp001/MAXHUB](https://github.com/qvstp001/MAXHUB)。唯一部署分发产物为 [GHCR Docker 镜像](https://github.com/qvstp001/MAXHUB/pkgs/container/maxhub)：`ghcr.io/qvstp001/maxhub`。GitHub Actions 的 `Publish Docker image` 在 `main` 推送或 `v*` 标签时运行。版本标签标记源码与镜像，不创建 GitHub Release、安装包或额外发布附件。
 
 流程先执行 Python 和地址测试，再构建镜像、启动虚构只读媒体容器、验证 302 和数据持久化，通过后才推送。`main` 发布 `latest` 和 `sha-<前七位>`；`v0.3.0` 发布 `0.3.0` 与对应 SHA 标签。发布凭据来自 Actions 的 `GITHUB_TOKEN`，新电脑不需要复制密码或在代码里保存 token。
 
 修改版本时同步 `maxhub/__init__.py`、`.env.example`、README、CHANGELOG，再在获准发布后推送主分支和未使用的版本标签。到 Actions 确认成功，不能只凭 Git 推送成功判断镜像已发布。GHCR 首次建立的软件包可能需要在包设置中设为 Public，确认匿名拉取正常。
+
+PR 仅针对当前轻量版的 `requirements.txt`、Dockerfile、原生网页和现有 Actions 评审。旧 Peach 前端、uv 锁文件和已移除工作流的依赖更新应关闭，不重新引入旧框架。README 负责部署入口，日常操作放在 `docs/USAGE.md`，浏览 API 放在 `docs/API.md`。
 
 NAS 部署读 README。升级前停止容器并备份整个数据卷；固定版本或 SHA 镜像有利于回退。若新版写入了数据库结构，回退应结合升级前的数据备份，不只换镜像。
 
