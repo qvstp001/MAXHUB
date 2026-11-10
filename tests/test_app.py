@@ -445,5 +445,78 @@ class AppTest(unittest.TestCase):
             self.assertEqual(thumbnail.size, (320, 180))
 
 
+    def test_actor_favorites_are_idempotent_persistent_and_separate_from_movie_state(self):
+        from maxhub.store import Store
+        url = '/api/favorites/actors'
+        name = self.movie()['actors'][0]['name']
+        original_key = self.app.store.get('signing_key')
+        for _ in range(2):
+            self.assertEqual(self.request(url, {'name': name, 'favorite': True})[0], 200)
+        listing = self.request(url + '?limit=1')[2]
+        self.assertEqual(listing['total'], 1)
+        self.assertEqual(listing['items'][0]['count'], 1)
+        self.assertIn('/actor/0', listing['items'][0]['thumb'])
+        profile = self.request('/api/entities?' + urlencode({'kind': 'actor', 'name': name}))[2]
+        self.assertTrue(profile['favorite'])
+        restored = Store(self.app.store.path.parent)
+        self.assertTrue(restored.collections.is_favorite_actor(name))
+        self.assertEqual(restored.get('signing_key'), original_key)
+        self.assertFalse(self.movie()['favorite'])
+        self.scan(force=True)
+        self.assertEqual(self.request(url)[2]['total'], 1)
+        self.assertEqual(self.request(url, {'name': name, 'favorite': False})[0], 200)
+        self.assertEqual(self.request(url)[2]['total'], 0)
+
+    def test_custom_list_lifecycle_filters_and_persistence(self):
+        from maxhub.store import Store
+        movie = self.movie()
+        status, _, listing = self.request('/api/lists', {'name': '  周末 & <清单>  '})
+        self.assertEqual(status, 201)
+        identity = listing['id']
+        path = '/api/lists/' + identity
+        self.assertEqual(listing['name'], '周末 & <清单>')
+        self.assertEqual(self.request('/api/movies?list=' + identity)[2]['total'], 0)
+        for _ in range(2):
+            self.assertEqual(self.request(path + '/movies', {'movie_id': movie['id'], 'included': True})[0], 200)
+        cards = self.request('/api/movies?' + urlencode({'list': identity, 'actor': '示例演员', 'tag': '剧情'}))[2]
+        self.assertEqual(cards['total'], 1)
+        self.assertNotIn('resources', cards['items'][0])
+        self.assertEqual(self.request('/api/movies?list=' + identity + '&search=not-found')[2]['total'], 0)
+        memberships = self.request('/api/lists?movie_id=' + movie['id'])[2]
+        self.assertTrue(memberships['items'][0]['included'])
+        self.assertEqual(memberships['items'][0]['count'], 1)
+        self.assertEqual(self.request(path, {'name': '已改名'})[0], 200)
+        self.scan(force=True)
+        restored = Store(self.app.store.path.parent)
+        self.assertEqual(restored.collections.get_list(identity)['name'], '已改名')
+        self.assertEqual(restored.catalog.movies(list_id=identity)['items'][0]['id'], movie['id'])
+        self.assertEqual(self.request(path + '/movies', {'movie_id': movie['id'], 'included': False})[0], 200)
+        self.assertEqual(self.request('/api/movies?list=' + identity)[2]['total'], 0)
+        self.request(path + '/movies', {'movie_id': movie['id'], 'included': True})
+        self.assertEqual(self.request(path, {'delete': True})[0], 200)
+        self.assertEqual(self.request(path)[0], 404)
+        self.assertEqual(self.request('/api/movies?list=' + identity)[0], 404)
+        with self.app.store.connect() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM list_movies').fetchone()[0], 0)
+        self.assertEqual(self.movie()['id'], movie['id'])
+        self.assertTrue((self.folder / 'movie.nfo').exists())
+
+    def test_collection_validation_and_cross_site_boundaries(self):
+        for name in ('', '   ', 'x' * 81, 'line\nbreak', None, ['name']):
+            self.assertEqual(self.request('/api/lists', {'name': name})[0], 400)
+        self.request('/api/lists', {'name': 'Same'})
+        self.assertEqual(self.request('/api/lists', {'name': 'same'})[0], 400)
+        self.assertEqual(self.request('/api/lists?limit=101')[0], 400)
+        self.assertEqual(self.request('/api/favorites/actors?page=0')[0], 400)
+        self.assertEqual(self.request('/api/favorites/actors', {'name': 'unknown', 'favorite': True})[0], 404)
+        self.assertEqual(self.request('/api/favorites/actors', {'name': '示例演员', 'favorite': 1})[0], 400)
+        self.assertEqual(self.request('/api/lists', {'name': '外站'}, {'Origin': 'https://other.test'})[0], 403)
+        listing = self.request('/api/lists')[2]['items'][0]
+        path = '/api/lists/' + listing['id']
+        self.assertEqual(self.request(path + '/movies', {'movie_id': 'unknown', 'included': True})[0], 404)
+        self.assertEqual(self.request(path + '/movies', {'movie_id': self.movie()['id'], 'included': 1})[0], 400)
+        self.assertEqual(self.request(path, {'delete': 'true'})[0], 400)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,7 +1,7 @@
 'use strict';
 // 地址与请求使用同一组浏览条件，供桌面页面和历史导航复用。
 (() => {
-  const defaults = () => ({view:'library',search:'',sort:'added',page:1,filter:'',actor:'',studio:'',series:'',tags:[],root:'',folder:'',recursive:true});
+  const defaults = () => ({view:'library',search:'',sort:'added',page:1,filter:'',actor:'',studio:'',series:'',tags:[],root:'',folder:'',recursive:true,list:''});
   const uniqueTags = values => [...new Set(values.filter(v=>typeof v==='string'&&v))].slice(0,20);
   function normalize(value) {
     const result={...defaults(),...value};
@@ -9,7 +9,8 @@
     result.page=Number.isSafeInteger(Number(result.page))?Math.max(1,Math.min(1000000,Number(result.page))):1;
     if(!['added','date','title','score'].includes(result.sort))result.sort='added';
     if(!['','missing','watched','unwatched'].includes(result.filter))result.filter='';
-    if(!['library','folders','actors','fields','settings'].includes(result.view))result.view='library';
+    if(!['library','folders','actors','fields','settings','favorites'].includes(result.view))result.view='library';
+    if(typeof result.list!=='string'||!/^([a-f0-9]{24})?$/.test(result.list))result.list='';
     if(!result.root){result.folder='';result.recursive=true;}
     return result;
   }
@@ -25,7 +26,7 @@
     else if(view==='folders'&&kind==='folder') {
       try{const folder=JSON.parse(legacy);value.root=String(folder.root||'');value.folder=String(folder.path||'');}catch{}
     }
-    for(const key of ['actor','studio','series','root','folder','sort','page'])if(params.has(key))value[key]=params.get(key);
+    for(const key of ['actor','studio','series','root','folder','sort','page','list'])if(params.has(key))value[key]=params.get(key);
     if(params.has('tag'))value.tags=params.getAll('tag');
     if(params.has('q'))value.search=params.get('q');
     if(params.has('status'))value.filter=params.get('status');
@@ -35,6 +36,7 @@
   function href(value) {
     const s=normalize(value), q=new URLSearchParams();
     for(const [key,v] of [['actor',s.actor],['studio',s.studio],['series',s.series]])if(v)q.set(key,v);
+    if(s.list)q.set('list',s.list);
     for(const tag of s.tags)q.append('tag',tag);
     if(s.root){q.set('root',s.root);if(s.folder)q.set('folder',s.folder);if(!s.recursive)q.set('recursive','0');}
     if(s.search)q.set('q',s.search);

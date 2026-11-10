@@ -10,6 +10,10 @@ assert.equal(browse.parse('#library?page=-9&sort=unsafe&folder=outside').page,1)
 assert.equal(browse.parse('#library?page=bad').page,1);
 assert.equal(browse.parse('#library?folder=outside').folder,'');
 assert.equal(browse.parse('#library?sort=unsafe').sort,'added');
+const listState={...value,list:'abcdef0123456789abcdef01'};
+assert.deepEqual(browse.parse(browse.href(listState)),{...listState,tags:['标签+1','标签 2']});
+assert.equal(browse.parse('#library?list=../unsafe').list,'');
+assert.equal(browse.parse('#favorites?q=演员').view,'favorites');
 assert.equal(browse.href({...browse.defaults(),actor:'甲',studio:'乙',tags:['一','二']}),'#library?actor=%E7%94%B2&studio=%E4%B9%99&tag=%E4%B8%80&tag=%E4%BA%8C');
 assert.deepEqual(browse.parse('#library?tag=a&tag=b&tag=a').tags,['a','b']);
 assert.deepEqual(browse.entity(browse.parse(browse.profile('actor','演员 / 甲'))),{kind:'actor',name:'演员 / 甲'});

@@ -15,6 +15,7 @@ const icons = {
   folder: '<path d="M3 7V4h6l3 3h9v13H3Z"/>',
   people: '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v3"/>',
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
+  list: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h8M8 12h8m-8 4h5"/>',
   tag: '<path d="M20 13 13 20a2 2 0 0 1-3 0L2 12V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>',
   settings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
@@ -29,11 +30,15 @@ const icons = {
 function icon(name) { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.film}</svg>`; }
 function esc(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const state = {...MaxhubBrowse.defaults(),movies:[],stats:{total:0,actors:0},settings:{},scan:{errors:[]},layout:localStorage.getItem('maxhub.layout')||'cover',density:localStorage.getItem('maxhub.density')||'normal',sidebarOpen:innerWidth>760&&localStorage.getItem('maxhub.sidebar')!=='closed',field:'studio',facetPage:1,facetSearch:''};
-let entityPending=false,entityController,pollTimer,browseVersion=0,queryVersion=0,searchTimer,movieController,currentAddress='',pendingScroll=null,scrollTimer;
+let entityPending=false,entityController,pollTimer,browseVersion=0,queryVersion=0,listHeaderVersion=0,searchTimer,movieController,currentAddress='',pendingScroll=null,scrollTimer;
 const positions=new Map();
 const folderBrowser=new FolderBrowser({api,esc,icon,href:(root,path)=>folderLink(root,path),onRecursive:recursive=>changeBrowse({recursive})});
 const filterPicker=new FilterPicker({api,esc,icon,toast,apply:changes=>changeBrowse(changes)});
-const movieDetail=new MovieDetail({api,esc,icon,toast,copy,profileHref:MaxhubBrowse.profile,filterHref:(kind,name)=>filterHref(kind,name),folderHref:r=>MaxhubBrowse.href({...MaxhubBrowse.defaults(),view:'folders',root:r.root,folder:r.folder})});
+const movieDetail=new MovieDetail({api,esc,icon,toast,copy,saveToList:movie=>collections.chooseMovieLists(movie),profileHref:MaxhubBrowse.profile,filterHref:(kind,name)=>filterHref(kind,name),folderHref:r=>MaxhubBrowse.href({...MaxhubBrowse.defaults(),view:'folders',root:r.root,folder:r.folder})});
+const collections=new CollectionManager({api,esc,icon,toast,restoreScroll,changed:()=>{
+  if(state.view==='favorites')collections.renderPage($('#saved-results'),state.search);
+  if(state.list){renderListHeader();renderResults();}
+},deleted:id=>{if(state.list===id)navigate('#favorites');}});
 const controlsObserver=new ResizeObserver(entries=>{for(const entry of entries)document.documentElement.style.setProperty('--folder-tree-top',(entry.borderBoxSize?.[0]?.blockSize||entry.target.offsetHeight)+88+'px');});
 async function api(path, body, signal) {
   const response = await fetch(path, {signal, credentials: 'same-origin', ...(body !== undefined ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {})});
@@ -55,13 +60,12 @@ function shell() {
   document.body.dataset.density=state.density;
   $('#app').innerHTML=`<button class="nav-scrim" data-action="nav-toggle" aria-label="关闭导航"></button><aside class="sidebar" aria-label="媒体库导航">
     <div class="sidebar-head"><a class="brand" href="#library" title="MAXHUB"><span class="brand-mark">${icon('film')}</span><span class="brand-name">MAXHUB</span></a><button class="icon-button" data-action="nav-toggle" aria-label="展开或收起导航" aria-expanded="${state.sidebarOpen}">${icon('panel')}</button></div>
-    <nav aria-label="主导航">${nav('library','媒体库','grid',`<b id="library-count">${state.stats.total}</b>`)}${nav('actors','演员','people')}${nav('folders','文件夹','folder')}${nav('fields','厂商与标签','tag')}</nav>
-    <div class="sidebar-note"><span>本地馆藏</span><p>STRM 与已刮削资料</p><a href="#folders">${icon('folder')} 浏览媒体来源</a></div>
+    <nav aria-label="主导航">${nav('library','媒体库','grid',`<b id="library-count">${state.stats.total}</b>`)}${nav('actors','演员','people')}${nav('fields','厂商与标签','tag')}${nav('favorites','收藏','heart')}</nav>
     <div class="sidebar-bottom">${nav('settings','设置','settings')}<div class="sidebar-foot"><span>MAXHUB <small>${esc(state.settings.version)} · <a href="https://github.com/qvstp001/MAXHUB" target="_blank" rel="noopener">源码</a></small></span><button class="icon-button theme-button" data-action="theme" aria-label="切换明暗主题"><span class="theme-sun">${icon('sun')}</span><span class="theme-moon">${icon('moon')}</span></button></div></div></aside>
     <div class="workspace"><header class="topbar"><button class="icon-button mobile-menu" data-action="nav-toggle" aria-label="打开导航" aria-expanded="${state.sidebarOpen}">${icon('panel')}</button><strong id="crumb"></strong><label class="search global-search">${icon('search')}<input id="search" type="search" placeholder="搜索馆藏" aria-label="搜索影片" autocomplete="off"><kbd>/</kbd></label><div class="top-actions"><button class="icon-button" data-action="scan" title="扫描媒体库" aria-label="扫描媒体库">${icon('scan')}</button><button class="icon-button density-button" data-action="density" aria-label="切换卡片密度" title="切换卡片密度">${icon('density')}</button><a class="icon-button" href="#settings" aria-label="打开设置" title="设置">${icon('settings')}</a><button class="icon-button theme-button" data-action="theme" aria-label="切换明暗主题"><span class="theme-sun">${icon('sun')}</span><span class="theme-moon">${icon('moon')}</span></button></div></header><main id="content"></main></div>`;
   const search=()=>{
     queryVersion++;movieController?.abort();clearTimeout(searchTimer);
-    searchTimer=setTimeout(()=>changeBrowse({search:$('#search').value,view:isBrowseView()?state.view:'library'}),220);
+    searchTimer=setTimeout(()=>changeBrowse({search:$('#search').value,view:isBrowseView()||state.view==='favorites'?state.view:'library'}),220);
   };
   $('#search').oninput=e=>{if(!e.isComposing)search();};$('#search').oncompositionend=search;
   bindActions();
@@ -108,14 +112,18 @@ function route() {
   if($('#search').value!==state.search)$('#search').value=state.search;
   document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+state.view));
   if(innerWidth<=760){state.sidebarOpen=false;$('#app').classList.remove('nav-open');}
-  movieDetail.close();render();
+  movieDetail.close();if($('#collection-dialog').open)$('#collection-dialog').close();render();
 }
 function heading(kicker,title,description,trailing='') { return `<section class="page-heading"><div><h1>${title}</h1><p>${description}</p></div>${trailing}</section>`; }
 function render() {
   if(!$('#content')) return;
-  browseVersion++;movieController?.abort();queryVersion++;filterPicker.dispose();folderBrowser.detach();controlsObserver.disconnect();entityController?.abort();entityPending=false;
-  $('#crumb').textContent=({library:'媒体库',actors:'演员',folders:'文件夹',fields:'厂商与标签',settings:'设置'})[state.view];
+  browseVersion++;movieController?.abort();queryVersion++;filterPicker.dispose();folderBrowser.detach();controlsObserver.disconnect();entityController?.abort();entityPending=false;collections.disposePage();
+  $('#crumb').textContent=({library:'媒体库',actors:'演员',folders:'文件夹',fields:'厂商与标签',settings:'设置',favorites:'收藏'})[state.view];
   if(state.view==='settings') renderSettings();
+  else if(state.view==='favorites'){
+    $('#content').innerHTML=heading('','收藏','常看的演员与自己整理的影片清单。')+'<div id="saved-results"></div>';
+    collections.renderPage($('#saved-results'),state.search);
+  }
   else if(['actors','fields'].includes(state.view)&&!MaxhubBrowse.entity(state))renderFacets();
   else renderLibrary();
   bindActions($('#content'));updateScan();if(state.view==='settings')restoreScroll();
@@ -135,13 +143,23 @@ function comboMarkup() {
 function renderLibrary() {
   const folders=state.view==='folders';
   state.total=null;
-  $('#content').innerHTML=`${MaxhubBrowse.entity(state)?'<div id="entity-header" class="entity-header"></div>':'<div id="highlights"></div>'}${comboMarkup()}<section class="library-controls"><div class="filter-row"><div class="tabs"><button class="tab ${!state.filter?'selected':''}" data-action="filter" data-value="">全部影片</button><button class="tab ${state.filter==='missing'?'selected':''}" data-action="filter" data-value="missing">资源缺失</button></div><div id="filter-pickers"></div><a href="${esc(MaxhubBrowse.href({...state,view:folders?'library':'folders',page:1}))}" class="filter-chip ${folders?'is-selected':''}" aria-label="${folders?'关闭':'打开'}目录树">${icon('folder')} 文件夹</a></div>
+  $('#content').innerHTML=`${state.list?'<div id="saved-list-header"></div>':''}${MaxhubBrowse.entity(state)?'<div id="entity-header" class="entity-header"></div>':'<div id="highlights"></div>'}${comboMarkup()}<section class="library-controls"><div class="filter-row"><div class="tabs"><button class="tab ${!state.filter?'selected':''}" data-action="filter" data-value="">全部影片</button><button class="tab ${state.filter==='missing'?'selected':''}" data-action="filter" data-value="missing">资源缺失</button></div><div id="filter-pickers"></div><a href="${esc(MaxhubBrowse.href({...state,view:folders?'library':'folders',page:1}))}" class="filter-chip ${folders?'is-selected':''}" aria-label="${folders?'关闭':'打开'}目录树">${icon('folder')} 文件夹</a></div>
     <div class="control-row"><span id="collection-stats">${statsMarkup()}</span><div class="control-options"><div class="layout-toggle" aria-label="封面比例"><button class="${state.layout==='cover'?'selected':''}" data-action="layout" data-value="cover" aria-pressed="${state.layout==='cover'}">横幅</button><button class="${state.layout==='poster'?'selected':''}" data-action="layout" data-value="poster" aria-pressed="${state.layout==='poster'}">海报</button></div><label class="sort-label"><span class="sr-only">排序</span><select id="sort" aria-label="影片排序"><option value="added">最近添加</option><option value="date">发行日期</option><option value="title">番号顺序</option><option value="score">元数据评分</option></select></label></div></div></section>
     ${folders?'<div class="folder-browse"><aside id="folder-tree" class="folder-tree-panel"></aside><section class="folder-results"><div id="folder-header" class="folder-header"></div><div id="results" aria-live="polite"></div></section></div>':'<div id="results" aria-live="polite"></div>'}`;
   $('#sort').value=state.sort;$('#sort').onchange=e=>changeBrowse({sort:e.target.value});
   filterPicker.mount($('#filter-pickers'),state);controlsObserver.observe($('.library-controls'));
   if(MaxhubBrowse.entity(state))renderEntity();
-  renderResults();if(folders)folderBrowser.mount($('#folder-tree'),$('#folder-header'),folderSelection());else if(!MaxhubBrowse.entity(state))renderHighlights();
+  if(state.list)renderListHeader();
+  renderResults();if(folders)folderBrowser.mount($('#folder-tree'),$('#folder-header'),folderSelection());else if(!MaxhubBrowse.entity(state)&&!state.list)renderHighlights();
+}
+async function renderListHeader() {
+  const id=state.list,target=$('#saved-list-header'),version=++listHeaderVersion,viewVersion=browseVersion;if(!target)return;
+  try{
+    const list=await api('/api/lists/'+encodeURIComponent(id));
+    if(version!==listHeaderVersion||viewVersion!==browseVersion||state.list!==id||!target.isConnected)return;
+    target.innerHTML=`<section class="saved-list-header"><div><h1>${esc(list.name)}</h1><p>自定义清单 · ${list.count} 部影片</p></div><div class="saved-list-actions"><button class="button" data-list-edit>改名</button><button class="button" data-list-delete>删除清单</button></div></section>`;
+    target.querySelector('[data-list-edit]').onclick=()=>collections.editList(list);target.querySelector('[data-list-delete]').onclick=()=>collections.deleteList(list);
+  }catch(error){if(version===listHeaderVersion&&viewVersion===browseVersion&&target.isConnected)target.innerHTML=`<section class="saved-list-header"><p class="error" role="alert">清单不可用：${esc(error.message)}</p><a class="button" href="#favorites">返回收藏</a></section>`;}
 }
 async function renderHighlights() {
   const version=browseVersion, target=$('#highlights');
@@ -158,6 +176,7 @@ async function renderResults() {
   target.setAttribute('aria-busy','true');
   target.innerHTML='<p class="muted">正在读取影片…</p>';
   const selected=folderSelection(), params=new URLSearchParams({page:state.page,limit:60,search:state.search,sort:state.sort,status:state.filter});
+  if(state.list)params.set('list',state.list);
   for(const kind of ['actor','studio','series'])if(state[kind])params.set(kind,state[kind]);
   for(const tag of state.tags)params.append('tag',tag);
   if(selected.root){params.set('root',selected.root);params.set('folder',selected.path);params.set('recursive',selected.recursive?'1':'0');}
@@ -169,7 +188,7 @@ async function renderResults() {
     const pageCount=Math.ceil(data.total/data.limit);
     target.innerHTML=`<div class="results-label"><span>${data.total.toLocaleString()} 部影片${state.search?` · 搜索“${esc(state.search)}”`:''}</span><span>本地元数据 · STRM</span></div>`+(data.items.length?
       `<div class="movie-grid ${state.layout}">${data.items.map(card).join('')}</div>${pagination(state.page,pageCount,'page')}`:
-      `<section class="empty-state"><div class="empty-icon">${icon('film')}</div><h2>${state.stats.total?'暂时没有匹配的影片':'为你的收藏，留一个位置。'}</h2><p>${state.stats.total?'试试其他关键词，或切换筛选条件。':'挂载存放 STRM、NFO 和图片的目录，扫描后即可浏览。'}</p><button class="button primary" data-action="${state.stats.total?'reset':'go-settings'}">${state.stats.total?'清除搜索和筛选':'配置我的媒体库'} ${icon('arrow')}</button></section>`);
+      `<section class="empty-state"><div class="empty-icon">${icon('film')}</div><h2>${state.list?'清单中暂无匹配的影片':state.stats.total?'暂时没有匹配的影片':'为你的收藏，留一个位置。'}</h2><p>${state.list?'在媒体库打开影片详情，点击「加入清单」。已有影片时，可尝试清除筛选。':state.stats.total?'试试其他关键词，或切换筛选条件。':'挂载存放 STRM、NFO 和图片的目录，扫描后即可浏览。'}</p>${state.list?'<a class="button" href="#library">浏览媒体库</a> ':''}<button class="button primary" data-action="${state.stats.total?'reset':'go-settings'}">${state.stats.total?'清除搜索和筛选':'配置我的媒体库'} ${icon('arrow')}</button></section>`);
     bindActions(target);restoreScroll();target.querySelectorAll('img').forEach(img=>img.onerror=()=>{img.hidden=true;});
   } catch(error) {
     if(error.name==='AbortError' || version!==queryVersion || viewVersion!==browseVersion) return;
@@ -204,7 +223,7 @@ async function renderEntity() {
       const selected=kind==='tag'?state.tags.includes(item.name):state[kind]===item.name;
       return `<button class="chip entity-refine" data-action="entity-filter" data-kind="${kind}" data-value="${esc(item.name)}" aria-pressed="${selected}">${item.thumb?`<img src="${esc(item.thumb)}" alt="" loading="lazy" decoding="async">`:''}<span>${esc(item.name)}</span><small>${item.count}</small></button>`;
     }).join('')}</div></div>`:'';
-    target.innerHTML=`<nav class="entity-breadcrumbs" aria-label="资料页路径"><a href="#${actor?'actors':'fields'}">${actor?'全部演员':'厂商与标签'}</a><span>/</span><span aria-current="page">${esc(data.name)}</span></nav><section class="entity-card" aria-label="${actor?'演员':'厂商'}资料"><div class="entity-identity"><span class="entity-portrait ${actor?'':'company'}"><span>${actor?esc([...data.name][0]):icon('studio')}</span>${data.thumb?`<img src="${esc(data.thumb)}" alt="${esc(data.name)}" decoding="async">`:''}</span><div class="entity-name"><span class="entity-kind">${actor?'演员':'厂商'} · 本地 NFO</span><h1>${esc(data.name)}</h1><p>本地馆藏统计</p></div><dl class="entity-stats"><div><dt>影片</dt><dd>${data.movie_count}</dd></div><div><dt>可播放影片</dt><dd>${data.available_count}</dd></div><div><dt>播放资源</dt><dd>${data.resource_count}</dd></div><div class="entity-years"><dt>发行年份</dt><dd>${esc(years)}</dd></div></dl></div>${data.missing_count?`<div class="entity-missing"><button data-action="entity-missing">${data.missing_count} 部影片资源不可用 ${icon('arrow')}</button></div>`:''}<div class="entity-associations">${actor?refinements('studio',data.related.studios,'按厂商筛选'):refinements('actor',data.related.actors,'按演员筛选')}${refinements('tag',data.related.tags,'常见标签')}</div></section>`;
+    target.innerHTML=`<nav class="entity-breadcrumbs" aria-label="资料页路径"><a href="#${actor?'actors':'fields'}">${actor?'全部演员':'厂商与标签'}</a><span>/</span><span aria-current="page">${esc(data.name)}</span></nav><section class="entity-card" aria-label="${actor?'演员':'厂商'}资料"><div class="entity-identity"><span class="entity-portrait ${actor?'':'company'}"><span>${actor?esc([...data.name][0]):icon('studio')}</span>${data.thumb?`<img src="${esc(data.thumb)}" alt="${esc(data.name)}" decoding="async">`:''}</span><div class="entity-name"><span class="entity-kind">${actor?'演员':'厂商'} · 本地 NFO</span><h1>${esc(data.name)}</h1><p>本地馆藏统计</p>${actor?`<button class="button actor-favorite" data-action="actor-favorite" data-name="${esc(data.name)}" aria-pressed="${!!data.favorite}">${icon('heart')} ${data.favorite?'已收藏演员':'收藏演员'}</button>`:''}</div><dl class="entity-stats"><div><dt>影片</dt><dd>${data.movie_count}</dd></div><div><dt>可播放影片</dt><dd>${data.available_count}</dd></div><div><dt>播放资源</dt><dd>${data.resource_count}</dd></div><div class="entity-years"><dt>发行年份</dt><dd>${esc(years)}</dd></div></dl></div>${data.missing_count?`<div class="entity-missing"><button data-action="entity-missing">${data.missing_count} 部影片资源不可用 ${icon('arrow')}</button></div>`:''}<div class="entity-associations">${actor?refinements('studio',data.related.studios,'按厂商筛选'):refinements('actor',data.related.actors,'按演员筛选')}${refinements('tag',data.related.tags,'常见标签')}</div></section>`;
     bindActions(target);target.querySelectorAll('img').forEach(img=>img.onerror=()=>{img.hidden=true;});
   } catch(error){if(error.name!=='AbortError'&&version===browseVersion&&target.isConnected){target.innerHTML=`<div class="entity-error"><p class="error" role="alert">${esc(error.message)}</p><button class="button" data-action="entity-retry">重试</button><a class="button" href="#${entity.kind==='actor'?'actors':'fields'}">返回索引</a></div>`;bindActions(target);}}
   finally{if(version===browseVersion){entityPending=false;restoreScroll();}}
@@ -275,12 +294,16 @@ const actions = {
   retry: () => renderResults(),
   'facet-page': el=>{state.facetPage+=Number(el.dataset.value);fetchFacets();window.scrollTo({top:0,behavior:'smooth'});},
   page:el=>changeBrowse({page:state.page+Number(el.dataset.value)}),
-  reset:()=>changeBrowse({...MaxhubBrowse.defaults(),view:state.view==='folders'?'folders':'library'}),
+  reset:()=>changeBrowse({...MaxhubBrowse.defaults(),list:state.list,view:state.view==='folders'?'folders':'library'}),
   'remove-filter':el=>{const kind=el.dataset.kind;changeBrowse(kind==='tag'?{tags:state.tags.filter(t=>t!==el.dataset.value)}:kind==='folder'?{root:'',folder:'',recursive:true}:{[kind]:''});},
   'go-settings':()=>navigate('#settings'),
   detail: el => openDetail(el.dataset.id),
   close:()=>movieDetail.close(),
   'entity-retry':()=>renderEntity(),
+  'actor-favorite':async el=>{
+    el.disabled=true;const name=el.dataset.name,favorite=el.getAttribute('aria-pressed')!=='true';
+    try{await api('/api/favorites/actors',{name,favorite});el.setAttribute('aria-pressed',favorite);el.innerHTML=icon('heart')+' '+(favorite?'已收藏演员':'收藏演员');await collections.changed();}finally{el.disabled=false;}
+  },
   'entity-missing':()=>changeBrowse({filter:state.filter==='missing'?'':'missing'}),
   'entity-filter':el=>{const kind=el.dataset.kind,value=el.dataset.value;if(kind==='tag'&&!state.tags.includes(value)&&state.tags.length>=20){toast('最多同时选择 20 个标签');return;}changeBrowse(kind==='tag'?{tags:state.tags.includes(value)?state.tags.filter(t=>t!==value):[...state.tags,value]}:{[kind]:state[kind]===value?'':value});},
   'copy-key': () => copy(state.settings.api_key),
