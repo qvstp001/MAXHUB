@@ -15,6 +15,7 @@ from . import __version__
 from .scanner import IMAGE_EXT, Scanner, bounded, strm_target
 from .store import Store
 from .artwork import Artwork
+from .collections import CollectionNotFound
 
 WEB = Path(__file__).resolve().parent.parent / 'web'
 
@@ -202,6 +203,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         except (ValueError, UnicodeError, json.JSONDecodeError) as error:
             self.send(400, {'error': str(error)})
+        except CollectionNotFound as error:
+            self.send(404, {'error': str(error)})
         except FileNotFoundError:
             self.send(404, {'error': '文件已不可用，请重新扫描媒体库'})
         except Exception:
@@ -224,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(body={'status': 'ok', 'version': __version__})
         if path == '/favicon.ico' and not post:
             return self.send(204)
-        if path in ('/', '/app.js', '/styles.css', '/catalog-controls.css', '/profiles.css', '/theme.js', '/browse-state.js', '/folder-browser.js', '/filter-picker.js', '/movie-detail.js', '/favicon.svg') and not post:
+        if path in ('/', '/app.js', '/styles.css', '/catalog-controls.css', '/profiles.css', '/collections.css', '/collections.js', '/theme.js', '/browse-state.js', '/folder-browser.js', '/filter-picker.js', '/movie-detail.js', '/favicon.svg') and not post:
             file = WEB / ('index.html' if path == '/' else path[1:])
             return self.send(body=file.read_bytes(), content_type=mimetypes.guess_type(file)[0] or 'text/plain',
                              headers={'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
@@ -279,6 +282,39 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(404, {'error': '接口不存在；MAXHUB 仅提供播放对接所需的 Emby 兼容接口子集'})
 
     def api(self, path, query, post):
+        collections = self.app.store.collections
+        if path == '/api/favorites/actors':
+            if post:
+                values = self.body()
+                if set(values) != {'name', 'favorite'}:
+                    raise ValueError('需要 name 和 favorite')
+                return self.send(body=collections.favorite_actor(values['name'], values['favorite']))
+            return self.send(body=collections.actors(int(query.get('page', ['1'])[0]),
+                int(query.get('limit', ['60'])[0]), query.get('search', [''])[0]))
+        if path == '/api/lists':
+            if post:
+                values = self.body()
+                if set(values) != {'name'}:
+                    raise ValueError('需要清单名称 name')
+                return self.send(201, collections.save_list(values['name']))
+            return self.send(body=collections.lists(int(query.get('page', ['1'])[0]),
+                int(query.get('limit', ['60'])[0]), query.get('search', [''])[0], query.get('movie_id', [''])[0]))
+        listing = re.fullmatch(r'/api/lists/([a-f0-9]{24})(/movies)?', path)
+        if listing:
+            if listing[2] and post:
+                values = self.body()
+                if set(values) != {'movie_id', 'included'}:
+                    raise ValueError('需要 movie_id 和 included')
+                return self.send(body=collections.include_movie(listing[1], values['movie_id'], values['included']))
+            if not listing[2]:
+                if post:
+                    values = self.body()
+                    if set(values) == {'name'}:
+                        return self.send(body=collections.save_list(values['name'], listing[1]))
+                    if set(values) == {'delete'} and values['delete'] is True:
+                        return self.send(body=collections.delete_list(listing[1]))
+                    raise ValueError('需要 name 或 delete: true')
+                return self.send(body=collections.get_list(listing[1]))
         if path == '/api/settings':
             if post:
                 self.app.save_settings(self.body())
@@ -295,6 +331,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(202 if post else 200, status)
         if path == '/api/movies' and not post:
             value = lambda key, default='': query.get(key, [default])[0]
+            if value('list'):
+                collections.get_list(value('list'))
             if value('recursive', '1') not in ('0', '1'):
                 raise ValueError('recursive 只能为 0 或 1')
             return self.send(body=self.app.store.catalog.movies(
@@ -302,7 +340,7 @@ class Handler(BaseHTTPRequestHandler):
                 search=value('search'), sort=value('sort', 'added'), status=value('status'),
                 favorite=value('favorite') == '1', actor=value('actor'), tag=query.get('tag', []),
                 studio=value('studio'), series=value('series'), root=value('root'), folder=value('folder'),
-                recursive=value('recursive', '1') == '1'))
+                recursive=value('recursive', '1') == '1', list_id=value('list')))
         if path == '/api/stats' and not post:
             return self.send(body=self.app.store.catalog.stats())
         if path == '/api/facets' and not post:
@@ -310,6 +348,8 @@ class Handler(BaseHTTPRequestHandler):
                 int(query.get('page', ['1'])[0]), int(query.get('limit', ['100'])[0]), query.get('search', [''])[0]))
         if path == '/api/entities' and not post:
             entity = self.app.store.catalog.entity(query.get('kind', [''])[0], query.get('name', [''])[0])
+            if entity and entity['kind'] == 'actor':
+                entity['favorite'] = collections.is_favorite_actor(entity['name'])
             return self.send(body=entity) if entity else self.send(404, {'error': '本地媒体库中未找到该资料'})
         if path == '/api/folders' and not post:
             return self.send(body=self.app.store.catalog.folders(query.get('root', [''])[0], query.get('path', [''])[0],

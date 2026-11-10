@@ -45,6 +45,29 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(self.store.catalog.movies(page=999)['page'], 3)
         self.assertEqual(self.store.catalog.movies(sort='title')['items'][0]['code'], 'TEST-000')
 
+    def test_custom_lists_remain_bounded_and_survive_reindexing(self):
+        from unittest.mock import patch
+        listing = self.store.collections.save_list('分页清单')
+        with self.store.connect() as db:
+            db.executemany('INSERT INTO list_movies VALUES (?,?,?)',
+                           [(listing['id'], f'{i:032x}', i) for i in range(127)])
+            db.executemany('INSERT INTO custom_lists VALUES (?,?,?)',
+                           [(f'{i:024x}', f'清单 {i:03}', i) for i in range(105)])
+            db.executemany('INSERT INTO favorite_actors VALUES (?,?)',
+                           [(f'演员 {i:03}', i) for i in range(127)])
+        with patch.object(self.store, 'movies', side_effect=AssertionError('full library read')):
+            pages = [self.store.catalog.movies(list_id=listing['id'], page=p) for p in (1, 2, 3)]
+            self.assertEqual([len(p['items']) for p in pages], [60, 60, 7])
+            self.assertEqual(self.store.catalog.movies(list_id=listing['id'], studio='厂商 0')['total'], 43)
+            self.assertEqual(self.store.collections.lists(limit=100)['total'], 106)
+            self.assertEqual(len(self.store.collections.lists(page=2, limit=100)['items']), 6)
+            self.assertEqual(len(self.store.collections.actors(page=2, limit=100)['items']), 27)
+        with self.store.connect() as db:
+            db.execute('DELETE FROM resources WHERE movie_id=?', (f'{0:032x}',))
+        self.assertEqual(self.store.collections.get_list(listing['id'])['count'], 126)
+        self.assertEqual(self.store.catalog.movies(list_id=listing['id'])['total'], 126)
+        self.assertEqual(Store(self.store.path.parent).collections.get_list(listing['id'])['count'], 126)
+
     def test_exact_folder_selection_unicode_search_and_live_state(self):
         self.assertEqual(self.store.catalog.movies(root=str(self.root), folder='a')['total'], 63)
         self.assertEqual(self.store.catalog.movies(root=str(self.root), folder='ab')['total'], 64)

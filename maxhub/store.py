@@ -34,11 +34,14 @@ class Store:
                        (json.dumps('proxy'), 'playback_mode', json.dumps('litepan')))
         from .catalog import Catalog
         self.catalog = Catalog(self)
+        from .collections import Collections
+        self.collections = Collections(self)
 
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
+        db.execute('PRAGMA foreign_keys=ON')
         try:
             yield db
             db.commit()

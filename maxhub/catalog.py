@@ -75,7 +75,7 @@ class Catalog:
                 db.execute("INSERT INTO settings VALUES ('catalog_version','1')")
 
     def movies(self, *, page=1, limit=60, search='', sort='added', status='', favorite=False,
-               actor='', tag='', studio='', series='', root='', folder='', recursive=True):
+               actor='', tag='', studio='', series='', root='', folder='', recursive=True, list_id=''):
         if page < 1 or not 1 <= limit <= 100:
             raise ValueError('页码至少为 1，每页数量为 1–100')
         ordering = {'added': 'c.added DESC', 'title': 'c.code COLLATE NOCASE, c.title COLLATE NOCASE',
@@ -89,6 +89,9 @@ class Catalog:
             raise ValueError('一次最多选择 20 个影片标签')
         clauses = ['EXISTS (SELECT 1 FROM resources r WHERE r.movie_id=c.movie_id)']
         params = []
+        if list_id:
+            clauses.append('EXISTS (SELECT 1 FROM list_movies lm WHERE lm.movie_id=c.movie_id AND lm.list_id=?)')
+            params.append(list_id)
         if search.strip():
             clauses.append('instr(c.search,?)>0')
             params.append(search.strip().casefold())

@@ -16,6 +16,7 @@ globalThis.MovieDetail=class MovieDetail {
     };
     this.photo.addEventListener('close',()=>{this.photo.innerHTML='';});
     document.addEventListener('keydown',event=>{
+      if(document.querySelector('#collection-dialog')?.open)return;
       if(event.altKey||event.ctrlKey||event.metaKey||event.isComposing||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
       if(this.photo.open&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();this.showPhoto(this.photoIndex+(event.key==='ArrowRight'?1:-1));}
       else if(this.dialog.open&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();this.move(event.key==='ArrowRight'?1:-1);}
@@ -53,6 +54,7 @@ globalThis.MovieDetail=class MovieDetail {
     this.dialog.innerHTML=this.toolbar()+`<div class="detail-shell"><section class="detail-media" aria-label="本地图片"><div class="detail-art-controls"><div class="layout-toggle"><button data-detail-action="art" data-art="cover" ${!m.cover?'disabled':''} class="${this.art==='cover'?'selected':''}">横幅</button><button data-detail-action="art" data-art="poster" ${!m.poster?'disabled':''} class="${this.art==='poster'?'selected':''}">海报</button></div><a id="detail-original" class="text-link" target="_blank" rel="noopener" ${m[this.art]?`href="${esc(m[this.art])}"`: 'hidden'}>查看原图 ${icon('external')}</a></div><a class="detail-art-main" data-art="${this.art}" ${m[this.art]?`href="${esc(m[this.art])}" target="_blank" rel="noopener"`:''} aria-label="查看影片原图"><span class="detail-art-placeholder">${icon('film')}<span>暂无本地封面</span></span>${m[this.art]?`<img id="detail-image" src="${esc(m[this.art])}" alt="${esc(m.title)}" decoding="async">`:''}</a>
       ${m.samples.length?`<details class="detail-gallery"><summary>本地剧照 <span>${m.samples.length}</span></summary><div class="detail-thumbnails"></div><button class="button gallery-more" data-detail-action="more-photos" hidden>加载更多剧照</button></details>`:''}</section>
       <section class="detail-summary"><div class="detail-heading"><div><span class="detail-eyebrow">${esc(m.code||'本地影片')}</span><h2 id="detail-title">${esc(m.title)}</h2>${m.original_title&&m.original_title!==m.title?`<p class="detail-original-title">${esc(m.original_title)}</p>`:''}</div></div>
+      <div class="detail-save-actions"><button class="button" data-detail-action="save-list">${icon('list')} 加入清单</button></div>
       <dl class="detail-facts">${[[m.date||m.year,'发行日期'],[m.runtime?m.runtime+' 分钟':'','时长'],[m.score?Number(m.score).toFixed(1):'','NFO 评分']].map(([value,label])=>`<div><dt>${label}</dt><dd>${esc(value||'未记录')}</dd></div>`).join('')}</dl>
       <div class="detail-relations">${m.studio?`<div><span>厂商</span>${this.link('studio',m.studio)}</div>`:''}${m.series?`<div><span>系列</span>${this.link('series',m.series)}</div>`:''}${m.director?`<div><span>导演</span><strong>${esc(m.director)}</strong></div>`:''}</div>
       <section class="detail-playback" aria-label="资源与播放"><label>播放资源 <span>${m.resources.length} 个</span><select id="detail-resource" aria-label="选择播放资源" ${!m.available?'disabled':''}>${m.resources.map(r=>`<option value="${r.id}" ${this.selected?.id===r.id?'selected':''} ${!r.available?'disabled':''}>${esc(r.name)}${!r.available?' · 不可用':''}</option>`).join('')}</select></label><div class="detail-resource-location"></div><button class="button primary detail-prepare" data-detail-action="prepare" ${!this.selected?.available?'disabled':''}>${icon('play')} 选择播放器</button><p class="detail-play-error error" role="alert" hidden></p><div id="play-panel" class="play-panel" hidden></div></section>
@@ -105,6 +107,7 @@ globalThis.MovieDetail=class MovieDetail {
     if(action==='close')this.close();else if(action==='retry')this.open(this.id);
     else if(action==='next'||action==='previous')this.move(action==='next'?1:-1);
     else if(action==='prepare')this.prepare();
+    else if(action==='save-list'&&this.data)this.options.saveToList(this.data);
     else if(action==='art')this.showArt(button.dataset.art);
     else if(action==='more-photos')this.morePhotos();
     else if(action==='photo')this.showPhoto(Number(button.dataset.index));

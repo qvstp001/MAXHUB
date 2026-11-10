@@ -10,6 +10,8 @@
 
 目前组合筛选、目录树、演员/厂商资料页和影片详情已经完成。未接入用户真实 NAS、LitePan 或网盘，不要把模拟接口检查当作实机播放成功。
 
+工作区新增演员收藏与自定义影片清单：演员资料页收藏、收藏总览、清单新建/改名/删除、详情页加入/移除和创建并加入。侧边栏只提供「收藏」入口，不展开演员或清单；文件夹从媒体库筛选条进入。收藏资料保存于同一 SQLite 数据卷，独立于可重建索引；清单影片查询仍通过 catalog 分页与组合筛选。此变更尚未发布，版本号仍为已发布的 0.2.0。
+
 ## 新电脑开始
 
 安装 Git、Python 3.12 或以上。Node.js 22 或以上仅用于地址测试和浏览器验收，应用运行不需要 Node.js。容器测试需 Docker Engine 或 Podman。
@@ -58,12 +60,14 @@ $env:HOST='127.0.0.1'
 | `maxhub/server.py` | HTTP/JSON、图片、播放链接和 LitePan Emby 兼容接口 |
 | `maxhub/store.py` | SQLite、配置、旧状态和数据迁移 |
 | `maxhub/catalog.py` | 分页摘要、字段索引、目录索引、资料页聚合 |
+| `maxhub/collections.py` | 演员收藏、自定义清单、清单影片关系与分页 |
 | `maxhub/scanner.py` | STRM/NFO/图片解析、增量扫描和稳定 ID |
 | `maxhub/artwork.py` | 受限并发、WebP 缩略图缓存 |
 | `web/app.js` | 页面、列表、资料页与导航 |
 | `web/browse-state.js` | 规范地址、组合条件、兼容旧链接 |
 | `web/filter-picker.js`、`web/folder-browser.js` | 按需筛选和目录树 |
 | `web/movie-detail.js` | 详情、剧照、资源选择、播放器偏好 |
+| `web/collections.js`、`web/collections.css` | 收藏侧栏、总览、清单编辑与影片收纳 |
 | `web/styles.css`、`catalog-controls.css`、`profiles.css` | 基础、筛选/目录、资料/详情样式 |
 | `tests/` | 单元/HTTP、虚构资料、桌面交互、容器检查 |
 
@@ -98,9 +102,12 @@ $env:NODE_PATH=(Resolve-Path '.test-data/browser-tools/node_modules').Path
 $env:PLAYWRIGHT_BROWSER_CHANNEL='msedge'
 node tests/desktop_browse.cjs
 node tests/desktop_profiles.cjs
+node tests/desktop_collections.cjs
 ```
 
 Linux/macOS 可用 `NODE_PATH="$PWD/.test-data/browser-tools/node_modules"`；未安装 Edge 时，通过本地 Playwright CLI `node .test-data/browser-tools/node_modules/playwright/cli.js install chromium` 安装测试浏览器，并清除 `PLAYWRIGHT_BROWSER_CHANNEL`。脚本仅使用 1440 × 1000、1100 × 800 桌面窗口，地址默认 `http://127.0.0.1:18099`，可用 `MAXHUB_TEST_URL` 指定。失败截图在 `artifacts/`，不用提交。
+
+收藏 API：`GET/POST /api/favorites/actors`；POST 使用 `{name,favorite}`。`GET/POST /api/lists` 查询或创建清单；`GET/POST /api/lists/{id}` 查询、改名 `{name}` 或删除 `{delete:true}`；`POST /api/lists/{id}/movies` 使用 `{movie_id,included}` 加入或移除。所有列表均分页、每页最多 100 项；清单查询支持 `search` 与 `movie_id`（返回 included）。影片查询新增 `list` 参数，地址同样保留此条件。不存在的清单返回 404，不回退显示全库。
 
 容器验收：
 
