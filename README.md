@@ -2,9 +2,9 @@
 
 在飞牛 fnOS NAS 上通过 Docker 运行的私人 STRM 媒体库。仅面向局域网部署，网页不设登录。读取已经刮削好的本地 NFO 和图片，通过 LitePan 的 Emby 反代入口播放。
 
-当前版本：**0.2.0**。界面参考 Peach 的桌面交互重新实现，支持可收起侧栏、演员与厂商资料页、组合筛选、目录树、影片详情、浅色/深色主题。列表使用独立分页索引，前端无需构建。
+当前版本：**0.3.0**。界面参考 Peach 的桌面交互重新实现，支持可收起侧栏、演员与厂商资料页、组合筛选、目录树、影片详情、浅色/深色主题。列表使用独立分页索引，前端无需构建。
 
-源码：[qvstp001/MAXHUB](https://github.com/qvstp001/MAXHUB) · 镜像：`ghcr.io/qvstp001/maxhub:0.2.0` · [版本说明](CHANGELOG.md) · [换电脑继续开发](docs/DEVELOPMENT.md)
+源码：[qvstp001/MAXHUB](https://github.com/qvstp001/MAXHUB) · 镜像：`ghcr.io/qvstp001/maxhub:0.3.0` · [版本说明](CHANGELOG.md) · [换电脑继续开发](docs/DEVELOPMENT.md)
 
 项目保留原仓库及 [Peach 上游](https://github.com/peach-mitao/peach) 的版权与 [AGPL-3.0-or-later 许可证](LICENSE)（上游基线 `de22796c04919aaa057d77930c33c81313765569`）。界面参考来源与交互对照见文末及桌面说明。
 
@@ -58,7 +58,7 @@ docker compose -f compose.ghcr.yaml pull
 docker compose -f compose.ghcr.yaml up -d
 ```
 
-`.env.example` 默认固定 `0.2.0`；`MAXHUB_IMAGE_TAG=latest` 跟随主分支的已验证构建。源码构建方式如下。
+`.env.example` 默认固定 `0.3.0`；`MAXHUB_IMAGE_TAG=latest` 跟随主分支的已验证构建。源码构建方式如下。
 
 1. 复制 `.env.example` 为 `.env`。
 2. 设置本地媒体路径、NAS 访问地址和 LitePan 反代入口。下面的媒体路径仅为示例，使用飞牛中该文件夹的实际路径。
@@ -66,7 +66,7 @@ docker compose -f compose.ghcr.yaml up -d
 ```dotenv
 MEDIA_PATH=/vol1/1000/media/strm
 MAXHUB_PORT=8096
-MAXHUB_IMAGE_TAG=0.2.0
+MAXHUB_IMAGE_TAG=0.3.0
 MAXHUB_DATA_VOLUME=maxhub-data
 PUBLIC_URL=http://192.168.1.10:8096
 PLAYBACK_PROXY_URL=http://192.168.1.10:18443
